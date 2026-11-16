@@ -1,0 +1,289 @@
+# streamflow インストールマニュアル
+
+対象バージョン: **0.4.396** / Linux x86_64・Ubuntu・WSL2
+
+受け取った配布ファイルの確認から、LMS の入力を CDA-VSR ×2 で処理して NDI へ出力する最初の起動までを説明します。操作は Ubuntu のターミナルで行います。Windows のコマンドプロンプトで行う操作は第 6 章に示します。
+
+## 1. 対象環境と受け取るファイル
+
+| 項目 | 条件 |
+|---|---|
+| OS | Ubuntu 24.04 以降の x86_64。WSL2 上の Ubuntu を含みます |
+| C ランタイム | glibc 2.39 以降 |
+| GPU | NVIDIA GPU 1 枚。配布する部品の対象は sm 86・89・120 |
+| ドライバー | CUDA 13 に対応する NVIDIA ドライバー |
+| TensorRT | `libnvinfer11` 11.2 以上。NVIDIA の CUDA apt リポジトリから導入します |
+| ネットワーク | LMS の入力元と NDI の受信側に到達できること。apt の導入時はインターネット接続も必要です |
+
+通常は deb を選びます。任意のディレクトリへ展開して使う場合は archive を選びます。どちらも実行ファイルと LMS、NDI、CDA-VSR、SPANv2 の標準部品を持ちます。streamflow の実行に Python、uv、CUDA Toolkit、nvcc の導入は必要ありません。
+
+| 受け取るファイル | 用途 |
+|---|---|
+| `streamflow_0.4.396_amd64.deb` | apt で導入する場合に使います |
+| `streamflow-0.4.396-linux_x86_64.tar.gz` | 展開して使う場合に使います |
+| `cda-vsr-x2-ft_c6_p96_20261101_18k.safetensors` | CDA-VSR ×2 の checkpoint。deb / archive とは別のファイルです |
+| `SHA256SUMS` | 受け取ったファイルの SHA-256 を照合します |
+
+### 導入前にファイルを照合する
+
+選んだ deb または archive と、checkpoint、`SHA256SUMS` を同じディレクトリに置き、そのディレクトリで実行します。
+
+```bash
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
+選んだ配布ファイルと checkpoint の両方が `OK` と表示されることを確認します。`--ignore-missing` は、選ばなかった方の配布ファイルを照合対象から外すための指定です。必要な checkpoint まで欠けていないか、ファイル名と結果を確認してください。`FAILED` が出た場合は導入を進めず、該当ファイルを受け取り直します。
+
+## 2. GPU と TensorRT の準備
+
+### NVIDIA ドライバーを用意する
+
+Ubuntu を直接動かす場合は、GPU に合った CUDA 13 対応の NVIDIA ドライバーを用意します。WSL2 の場合は Windows 側に NVIDIA ドライバーを導入し、WSL の Ubuntu 内には Linux 用 NVIDIA ドライバーを導入しません。[NVIDIA のドライバー配布ページ](https://www.nvidia.com/drivers/)と [CUDA on WSL の公式手順](https://docs.nvidia.com/cuda/wsl-user-guide/index.html)を参照してください。
+
+WSL2 を使う場合は、Windows のコマンドプロンプトで `wsl.exe --list --verbose` を実行し、使用する Ubuntu の `VERSION` が `2` であることを確認します。以降の準備と導入は、その Ubuntu のターミナルで行います。
+
+### NVIDIA の CUDA apt リポジトリを登録する
+
+Ubuntu のバージョンと CPU の種類を確認し、対応するリポジトリ名を選びます。
+
+```bash
+cat /etc/os-release
+uname -m
+```
+
+| Ubuntu | `REPO` に指定する値 |
+|---|---|
+| 24.04 | `ubuntu2404` |
+| 26.04 | `ubuntu2604` |
+
+次は Ubuntu 24.04 の例です。Ubuntu 26.04 では最初の `REPO` の値を `ubuntu2604` に替えます。ほかのバージョンは、[NVIDIA の Ubuntu 向け公式手順](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/#ubuntu)で対応するリポジトリを確認してください。
+
+```bash
+sudo apt update
+sudo apt install curl ca-certificates
+REPO=ubuntu2404
+curl -fsSLO "https://developer.download.nvidia.com/compute/cuda/repos/${REPO}/x86_64/cuda-keyring_1.1-1_all.deb"
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt update
+apt-cache policy libnvinfer11
+```
+
+`libnvinfer11` の候補が 11.2 以上であることを確認します。WSL2 でも Ubuntu のバージョンに対応するリポジトリを使います。`wsl-ubuntu` リポジトリからは TensorRT を導入できません。`cuda-keyring` は apt の登録先を設定し、別の NVIDIA リポジトリ用の `cuda-keyring` が入っている場合は置き換えます。
+
+この配布物の build に使った TensorRT SDK は **11.2.1.2** です。TensorRT は配布物に含まれません。deb は次章の apt 操作でランタイムを導入します。archive では次章の依存パッケージも導入します。
+
+## 3. streamflow を導入する
+
+### deb を使う場合
+
+受け取った deb のあるディレクトリで実行します。
+
+```bash
+sudo apt install ./streamflow_0.4.396_amd64.deb
+streamflow --help
+```
+
+apt は `libnvinfer11 >= 11.2`、`libavahi-client3`、`libstdc++6`、`libgcc-s1`、`zlib1g`、`libc6 >= 2.39` を依存として導入します。既定では推奨パッケージの `avahi-daemon` も導入します。NDI の mDNS による発見を使う場合は、streamflow を動かす Ubuntu 側で daemon を起動します。
+
+```bash
+sudo systemctl enable --now avahi-daemon
+systemctl is-active avahi-daemon
+```
+
+systemd を使わない WSL2 では、代わりに `sudo service avahi-daemon start` と `service avahi-daemon status` を使います。NDI の受信側が送信元の IP を直接指定し、mDNS による発見を必要としない運用では、apt の `--no-install-recommends` で daemon の導入を省けます。
+
+| 配置 | 内容 |
+|---|---|
+| `/opt/streamflow` | 実行ファイルと標準部品 |
+| `/usr/bin/streamflow` | `/opt/streamflow/bin/streamflow` を指すコマンド |
+| `/usr/share/doc/streamflow` | 導入手順、設定例、利用者向け文書 |
+
+checkpoint は同梱されません。設定と checkpoint は操作者が書き込めるディレクトリに置きます。通常の起動は `sudo` を付けずに行います。
+
+### archive を使う場合
+
+操作者が書き込める場所で展開します。第 2 章の apt リポジトリの登録後、依存パッケージも導入します。
+
+```bash
+tar -xzf streamflow-0.4.396-linux_x86_64.tar.gz
+cd streamflow-0.4.396-linux_x86_64
+sha256sum --check SHA256SUMS
+sudo apt install libnvinfer11 libavahi-client3 libstdc++6 libgcc-s1 zlib1g avahi-daemon
+./prefix/bin/streamflow --help
+```
+
+ここで照合する `SHA256SUMS` は archive 内部のファイル用です。第 1 章の配布ファイルと checkpoint 用の `SHA256SUMS` とは別です。NDI の mDNS を使う場合は deb と同様に Avahi を起動します。
+
+archive はディレクトリ全体をまとめて移動できます。実行ファイルだけを取り出さず、`prefix/` の配置を保ちます。以下の起動例の `streamflow` は、展開先の `prefix/bin/streamflow` の絶対パスに替えます。archive 内の追加の学習用ツールは別の環境で使う物で、streamflow の起動には必要ありません。詳細は同梱の `TRAINING.md` を参照してください。
+
+## 4. checkpoint を置き、引数で最初に起動する
+
+### 操作者の作業ディレクトリを作る
+
+第 1 章で照合した checkpoint のあるディレクトリで実行します。
+
+```bash
+mkdir -p "$HOME/streamflow/models"
+cp cda-vsr-x2-ft_c6_p96_20261101_18k.safetensors \
+  "$HOME/streamflow/models/"
+cd "$HOME/streamflow"
+```
+
+checkpoint の中身は変更せずに使います。TensorRT engine のパスを指定する操作は不要です。SPANv2 を選ぶ場合は、対応する checkpoint を別途用意します。詳細は [ENGINE.md](ENGINE.md) を参照してください。
+
+### LMS → CDA-VSR ×2 → NDI の起動例
+
+接続 ID `abc-defg` と channel `1` を実際の接続に替えます。この例は password が空の接続です。password がある場合は `connection.password` の空文字列を実際の値に替えてください。
+
+```bash
+streamflow \
+  --input lms \
+  --input-option "connection.id='abc-defg'" \
+  --input-option "connection.password=''" \
+  --input-option connection.channel=1 \
+  --input-option delay_ms=100 \
+  --arch cda-vsr \
+  --model "$HOME/streamflow/models/cda-vsr-x2-ft_c6_p96_20261101_18k.safetensors" \
+  --inference-option precision=fp16 \
+  --inference-option input_width=960 \
+  --inference-option input_height=540 \
+  --output ndi --output-option "name='streamflow'" \
+  --width 1920 --height 1080 --audio
+```
+
+入力 960 × 540、出力 1920 × 1080 は設定例です。入力の幅と高さは実際の映像に、出力の幅と高さは出力したい大きさに合わせます。`delay_ms=100` は LMS の受信側が待つ時間を ms で指定し、省略した場合も 100 ms です。
+
+`--audio` は出力の音声を有効にし、省略すると音声を送りません。CLI の `--model` に相対パスを書く場合は、実行したディレクトリが基点です。初回は GPU を使って不足する TensorRT engine を準備するため時間がかかります。
+
+## 5. YAML の設定ファイルで起動する
+
+第 4 章の `$HOME/streamflow` に、次の内容を `settings.yaml` として保存します。接続と映像の幅・高さは実際の値に替えます。
+
+```yaml
+input:
+  type: lms
+  connection:
+    id: "abc-defg"
+    password: ""
+    channel: 1
+  delay_ms: 100
+inference:
+  arch: cda-vsr
+  model: models/cda-vsr-x2-ft_c6_p96_20261101_18k.safetensors
+  precision: fp16
+  input_width: 960
+  input_height: 540
+output:
+  type: ndi
+  name: streamflow
+  width: 1920
+  height: 1080
+  audio:
+    enabled: true
+```
+
+```bash
+streamflow --config "$HOME/streamflow/settings.yaml"
+```
+
+YAML の `inference.model` の相対パスは、設定ファイルのあるディレクトリが基点です。この例では `$HOME/streamflow/models/` の checkpoint を読みます。YAML 内はこの例の相対パスか、実際の絶対パスを使ってください。
+
+引数と設定ファイルを併用すると、同じ項目は引数が優先されます。たとえば `streamflow --config settings.yaml --width 1280 --height 720` は出力の大きさだけを替えます。入力・出力・推論の種類と、部品に必要な項目は引数または設定ファイルで指定します。全項目は [USAGE.md](USAGE.md)、設定例は [settings-example.yaml](settings-example.yaml) を参照してください。
+
+### 起動後の確認と停止
+
+NDI の受信側で、出力名 `streamflow` の映像と音声を確認します。NDI の出力は最初の入力 frame が届いてから開きます。入力前は NDI の出力が見つからない場合があります。入力が途切れると再開を待ち、出力に渡せる新しい画が無い時は最後の画と無音を送ります。
+
+標準出力には進捗・動作状況と終了時の統計が JSON の行で出ます。起動時のエラーは標準エラー出力を確認します。停止は `Ctrl+C` を一回押し、処理と統計の出力を待ちます。待っている間にもう一回停止要求を送ると、残っている待ちを打ち切り、終了コードが 0 以外になります。
+
+<a id="windows-batch-files-for-wsl"></a>
+
+## 6. Windows から WSL2 の streamflow を起動する
+
+配布物の `streamflow-cdavsr.bat` は CDA-VSR、`streamflow-spanv2.bat` は SPANv2 を選んで起動します。deb での配置は `/opt/streamflow/share/streamflow/windows/`、archive は `prefix/share/streamflow/windows/` です。
+
+使うファイルを Windows 側のフォルダーにコピーし、テキストエディターで先頭の設定を編集します。
+
+```bat
+set "WSL_DISTRO=Ubuntu-24.04"
+set "STREAMFLOW_MODEL=/home/<WSL_USER>/streamflow/models/cda-vsr-x2-ft_c6_p96_20261101_18k.safetensors"
+set "NDI_NAME=streamflow-cdavsr"
+```
+
+`WSL_DISTRO` は `wsl.exe --list --verbose` に表示された名前に合わせます。`<WSL_USER>` は実際の Ubuntu のユーザー名に替えます。`STREAMFLOW_MODEL` は Windows のパスではなく、**WSL 内の checkpoint の絶対パス**です。SPANv2 の場合は SPANv2 の checkpoint を指定します。deb は batch file の初期設定に書かれた重みのパスを作らないため、必ず変更します。
+
+最初に Windows のコマンドプロンプトで確認します。
+
+```bat
+wsl.exe -d Ubuntu-24.04 -- streamflow --help
+```
+
+続いて batch file を置いたフォルダーで、使用するモデルの一方を実行します。`abc-defg` と `1` は実際の LMS の ID と channel に替えます。
+
+```bat
+streamflow-cdavsr.bat abc-defg 1 100
+```
+
+SPANv2 の場合は `streamflow-spanv2.bat abc-defg 1 100` です。引数は左から LMS の ID、channel、受信の待ち時間 (ms) です。省略した値は画面で入力を求められ、待ち時間を空欄にすると 100 ms を使います。
+
+batch file は入力 960 × 540・fp16・出力 1920 × 1080・音声有効の LMS → ×2 → NDI を起動し、password は空文字列です。password や入力サイズを変える場合は、第 4 章の引数を使うか、batch file 内の対応する引数を編集します。
+
+archive を使う場合は、batch file 内の `-- streamflow` を展開先の `prefix/bin/streamflow` の WSL 内の絶対パスに替える方法があります。第 6 章の `wsl.exe ... -- streamflow --help` も同じ絶対パスに替えて確認します。deb では `/usr/bin/streamflow` を使えるため変更は不要です。
+
+## 7. 導入の確認と削除
+
+### 導入した内容を確認する
+
+deb のバージョンと実行ファイルを確認します。
+
+```bash
+dpkg-query -W -f='${Package} ${Version}\n' streamflow
+readlink -f /usr/bin/streamflow
+streamflow --help
+cat /opt/streamflow/share/streamflow/release.json
+```
+
+バージョンは `0.4.396`、実行ファイルは `/opt/streamflow/bin/streamflow` です。archive は展開先で次を実行します。
+
+```bash
+./prefix/bin/streamflow --help
+cat prefix/share/streamflow/release.json
+```
+
+`release.json` は配布物と TensorRT SDK のバージョンを記録します。ライブラリの license と出どころは `share/streamflow/packages/` にあり、deb は `/opt/streamflow/`、archive は `prefix/` からの相対パスです。
+
+`--help` の成功はコマンドが動くことの確認です。GPU での推論、LMS の接続、NDI の受信は第 4 章または第 5 章の起動で別途確認します。運転の説明は [OPERATION.ja.md](OPERATION.ja.md)、既知の制限は [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) を参照してください。
+
+### 削除する
+
+streamflow を停止した後、deb は次で削除します。
+
+```bash
+sudo apt remove streamflow
+```
+
+`sudo apt purge streamflow` も使用できます。操作者のディレクトリの設定と checkpoint は別に保管します。TensorRT や Avahi をほかのアプリケーションも使う場合は削除しないでください。
+
+archive は停止後に設定と checkpoint を退避し、展開した `streamflow-0.4.396-linux_x86_64` ディレクトリをファイルマネージャーなどで削除します。Windows の batch file の実行パスも不要なら削除・変更します。
+
+engine cache は `$XDG_CACHE_HOME/tensoracle`、未設定なら `~/.cache/tensoracle` にあります。ほかのアプリケーションからも使われる場合があるため、streamflow と一緒に削除する必要はありません。checkpoint、入力サイズ、GPU、TensorRT などが変わると、次の起動で engine を作り直す場合があります。
+
+## 8. よくある失敗と対処
+
+| 症状 | 確認と対処 |
+|---|---|
+| checksum が `FAILED` | 導入を止め、該当ファイルと同じ配布分の `SHA256SUMS` を受け取り直します。ファイル名の変更前に照合します |
+| `libnvinfer11` の候補が無い | 第 2 章の Ubuntu のバージョン、NVIDIA の apt 登録と `sudo apt update` の結果を確認します。WSL2 でも Ubuntu 用を使います |
+| `libnvinfer.so.11` を読み込めない | `dpkg-query -W libnvinfer11` で 11.2 以上の導入を確認します。archive は第 3 章の依存も導入します |
+| GPU を初期化できない | CUDA 13 対応の NVIDIA ドライバーを確認します。WSL2 は Windows 側のドライバーと、対象の Ubuntu が WSL2 であることを確認します |
+| `streamflow` が見つからない | deb は `/usr/bin/streamflow` を確認します。archive は `prefix/bin/streamflow` の絶対パスで起動します |
+| checkpoint が見つからない | 別ファイルの checkpoint を置いたか確認します。CLI の相対パスは実行ディレクトリ、YAML は設定ファイルのディレクトリが基点です |
+| モデルの読込み・engine の準備に失敗 | モデルと checkpoint の組合せ、読取り権限と cache の書込み権限を確認し、表示された診断に従います |
+| 初回の出力まで時間がかかる | engine の準備中か標準出力を確認します。初回の準備は GPU と時間が必要です。入力サイズは実際の映像に合わせます |
+| NDI の出力が見つからない | 最初の LMS frame、出力名、Avahi の起動を確認します。送信元と受信側の到達性、WSL2 と Windows のネットワーク・ファイアウォール設定も確認します |
+| 音声が出ない | `--audio` または `output.audio.enabled: true` と入力の音声を確認します。出力する新しい画が無い時は無音を送ります |
+| 設定や部品のエラー | 診断された項目と部品を [USAGE.md](USAGE.md) と照合し、設定を直して起動し直します |
+
+問い合わせる際は、配布物のバージョン、Ubuntu / WSL2 の別、起動コマンドまたは設定、表示された診断を添えてください。
+
+Copyright © 2026 minamikik / sync.dev. All rights reserved.
