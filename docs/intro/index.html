@@ -563,7 +563,7 @@
           <div><p class="label" lang="en">Thread R</p><h3>受信と decode</h3><p>入力 module が、受信、decode、色の変換を受け持ちます。CDA-VSR を使う時は、decode で取り出した motion vector と残差 (side data) を frame と一緒に渡します。</p></div>
           <div><p class="label" lang="en">Thread P</p><h3>超解像と resize</h3><p>streamflow の C++ の thread が、画像処理の library の pixtreme で色を変換し、CDA-VSR または SPANv2 で推論して、起動時に決めた出力の大きさへ揃えます。</p></div>
           <div><p class="label" lang="en">Thread E · S</p><h3>encode と送信</h3><p>出力 module が、encode と送信を受け持ちます。thread S は一周期に一枚ずつ、出力の側の clock で送り出します。</p></div>
-          <div><p class="label" lang="en">Buffers</p><h3>短い buffer</h3><p>pre buffer と post buffer は、満杯の時に最も古い frame を捨てる drop buffer です。待ちを溜め込まず、遅れを後へ持ち越しません。</p></div>
+          <div><p class="label" lang="en">Buffers</p><h3>短い buffer</h3><p>pre buffer と post buffer は、満杯の時に最も古い frame を捨てる drop buffer です。待ちを溜め込まず、遅れを後へ持ち越しません。二つの buffer の深さは設定 file で変えられます。</p></div>
         </div>
       </div>
     </section>
@@ -728,7 +728,7 @@
           <li><h3>encode 済みの data は捨てない</h3><p>受け取った data はすべて decode し、encode した後の data も捨てません。encode 済みの data は前の frame を参照するため、途中を捨てると、次の参照の起点まで受け手の画が崩れるからです。</p></li>
           <li><h3>入力が途切れても待ち続ける</h3><p>入力が途切れても streamflow は終了せず、入力の再開を待ちます。その間も、最後の画と無音を同じ周期で送り続けます。</p></li>
           <li><h3>途切れの後は時系列の状態を初めから</h3><p>CDA-VSR の時系列の状態は、途切れの後の最初の frame と、I frame ごとに初期化します。参照が欠けた frame も推論して送り、その数を統計に数えます。</p></li>
-          <li><h3>常時の連続運転</h3><p>常時の連続運転を前提にしています。停止の要求 (SIGINT、SIGTERM) を受けると、受け付けた処理を終えてから入力と出力を閉じ、統計を出して終わります。</p></li>
+          <li><h3>常時の連続運転</h3><p>常時の連続運転を前提にしています。停止の要求 (SIGINT、SIGTERM) を受けると、受け付けた処理を終えてから入力と出力を閉じ、統計を出して終わります。その待ちの間に二回目の停止の要求を受けると、残りの待ちを打ち切り、統計を出して 0 以外の終了 code で終わります。</p></li>
         </ul>
       </div>
     </section>
@@ -741,7 +741,9 @@
           <p class="lead" style="margin-top:24px">出力の frame rate は入力と同じで、streamflow は frame rate を変換しません。thread S は出力の側の clock で一周期に一枚ずつ送り、届く間隔の揺れを出力へ持ち込みません。</p>
           <ul class="points">
             <li><h3>入力の到着に緩やかに追従する</h3><p>送り手の clock と出力の clock は、わずかに違います。NDI と LMS の出力では、post buffer の待ちが目標に近づくよう、送信の時刻を一周期ごとにごく小さな量だけ前後させます。この追従は既定で有効です。</p><p class="small">目標の待ち (既定 4 ms) と、一周期あたりに動かす量の上限 (既定 0.1 ms) は、設定で変えられます。</p></li>
-            <li><h3>周期が変わったら開き直す</h3><p>出力は、最初の frame が届いてから、その frame の周期で開きます。走行の途中で入力の frame 周期が変わった時は、受け付けた frame を送り終えてから出力を開き直します。</p></li>
+            <li><h3>周期が変わったら開き直す</h3><p>出力は、最初の frame が届いてから、その frame の周期で開きます。走行の途中で入力の frame 周期が変わった時は、受け付けた frame を送り終えてから出力を開き直します。開き直す間だけ、出力は途切れます。</p></li>
+            <li><h3>LMS の受信の待ちを選ぶ</h3><p>LMS の入力では、LMS の SDK が受信の側で待つ時間 (<code>delay_ms</code>) を、引数か設定 file で選べます。書かなかった時は 100 ms です。</p></li>
+            <li><h3>処理の境目の時刻を記録する</h3><p><code>--stage-trace &lt;path&gt;</code> を付けて起動すると、入力、thread P、出力の処理の境目の時刻を記録し、終了時に一つの file に書き出します。遅延がどの段で生じるかを調べる時に使います。</p><p class="small">記録は起動時に確保した配列に入れ、系列ごとに直近の n frame 分 (既定 9000、<code>--stage-trace-records</code> で変更) を残し、古い記録から上書きします。運転中に配列は増えません。付けずに起動した時は記録しません。</p></li>
           </ul>
         </div>
         <figure class="fig">
@@ -1088,26 +1090,32 @@
             <p class="label"><span class="num">06</span><span lang="en">Setup</span></p>
             <h2 id="setup-title" lang="en">Install once.<br>Start with arguments.</h2>
           </div>
-          <p class="lead">配布物は、streamflow の実行 file と標準の部品を一つの prefix にまとめた native の配布物です。file を一つ手に入れて導入の command を一回実行すれば、TensorRT を入れた host で使えます。実行に Python の環境は使いません。</p>
+          <p class="lead">配布物は、streamflow の実行 file と標準の部品を一つの prefix にまとめた native の配布物で、deb と archive の二つの形があります。配布物を受け取り、導入の command を一回実行すれば、TensorRT を入れた host で使えます。実行に Python の環境は使いません。</p>
         </div>
         <div class="split">
           <ol class="steps">
-            <li><h3>導入する</h3><p>archive を展開するか、deb を apt で導入します。TensorRT は host に入れます。</p></li>
-            <li><h3>重みを用意する</h3><p>CDA-VSR または SPANv2 の checkpoint (safetensors) を用意します。指定するのは checkpoint の path だけで、TensorRT の engine は部品が作って cache します。</p></li>
-            <li><h3>引数で起動する</h3><p>部品の名前と出力の大きさを引数で選んで起動します。よく使う組み合わせは YAML の設定 file に保存し、<code>--config</code> で preset のように使い分けられます。同じ項目は引数の値を使います。</p></li>
-            <li><h3>動きを見る</h3><p>運転中は進捗と動作の状況を標準出力に出し、終了時に統計を出します。統計には、thread P が frame 一枚を処理した時間の件数、平均、中央値、p90、最大が入ります。</p></li>
+            <li><h3>host を用意する</h3><p>Ubuntu 24.04 以降の Linux x86_64 (WSL2 を含む) に NVIDIA の driver を入れ、NVIDIA の CUDA の apt repository を登録します。WSL2 では driver を Windows の側に入れます。CUDA Toolkit は要りません。</p></li>
+            <li><h3>配布物を導入する</h3><p>受け取った deb を apt で導入すると、prefix が <code>/opt/streamflow</code> に入り、<code>streamflow</code> の command で呼べます。apt は TensorRT の runtime と、NDI が使う Avahi を一緒に入れます。archive は展開した directory のまま使え、TensorRT は host に入れておきます。</p></li>
+            <li><h3>重みを用意する</h3><p>CDA-VSR または SPANv2 の checkpoint (safetensors) を、配布物とは別に受け取ります。指定するのは checkpoint の path だけで、TensorRT の engine は部品が初回に作って cache します。</p></li>
+            <li><h3>引数で起動する</h3><p>部品の名前と出力の大きさを引数で選んで起動します。部品ごとの設定は <code>--input-option</code> のように key と値の組で渡します。よく使う組み合わせは YAML の設定 file に保存し、<code>--config</code> で preset のように使い分けられます。同じ項目は引数の値を使います。</p></li>
+            <li><h3>動きを見る</h3><p>運転中は進捗と動作の状況を、一行に一つの JSON で標準出力に出し、終了時に統計を出します。統計には、thread P が frame 一枚を処理した時間の件数、平均、中央値、p90、最大が入ります。</p></li>
           </ol>
           <div>
             <div class="code">
-              <div class="code-head"><span>Example</span><span>bash</span></div>
-<pre><code><span class="p">$</span> streamflow \
-    --input <span class="v">lms</span> --output <span class="v">ndi</span> \
-    --arch <span class="v">cda-vsr</span> \
-    --model ./weights.safetensors \
-    --width 1920 --height 1080 \
-    --audio --config live.yaml</code></pre>
+              <div class="code-head"><span>Install</span><span>bash</span></div>
+<pre><code><span class="p"># NVIDIA の CUDA の apt repository を登録した後</span>
+<span class="p">$</span> sudo apt install ./streamflow_<span class="v">X.Y.Z</span>_amd64.deb
+<span class="p">$</span> streamflow --help</code></pre>
             </div>
-            <p class="aside-note"><b>Windows から起動する</b> — 配布物に付く batch file を使うと、Windows から WSL の中の streamflow を一回の操作で起動できます。batch file は、model の種類、LMS の ID と channel などを受けて引数を組み立てます。</p>
+            <div class="code" style="margin-top:20px">
+              <div class="code-head"><span>Run</span><span>bash</span></div>
+<pre><code><span class="p">$</span> streamflow --config live.yaml \
+    --input <span class="v">lms</span> --input-option connection.channel=1 \
+    --arch <span class="v">cda-vsr</span> --model ./weights.safetensors \
+    --output <span class="v">ndi</span> --width 1920 --height 1080 \
+    --audio</code></pre>
+            </div>
+            <p class="aside-note"><b>Windows から起動する</b> — 配布物には、Windows から WSL の中の streamflow を一回の操作で起動する batch file が、CDA-VSR 用と SPANv2 用に一つずつ付きます。使う model の batch file に LMS の ID、channel、<code>delay_ms</code> を渡すと、LMS の入力から ×2 の推論を経て NDI の出力へ送る引数を組み立てて起動します。WSL の distro の名前と重みの path は、batch file の先頭で変えられます。</p>
           </div>
         </div>
       </div>
@@ -1120,20 +1128,23 @@
             <p class="label"><span class="num">07</span><span lang="en">Specifications</span></p>
             <h2 id="specs-title" lang="en">At a glance.</h2>
           </div>
-          <p class="lead">入出力、推論、動作環境を一覧にまとめました。<span class="tag planned" lang="en" style="margin-left:0">Planned</span> の入出力は、今後対応します。</p>
+          <p class="lead">入出力、推論、起動と運転、動作環境を一覧にまとめました。<span class="tag planned" lang="en" style="margin-left:0">Planned</span> の入出力は、今後対応します。</p>
         </div>
         <table class="spec">
           <tbody>
             <tr><th scope="row">入力</th><td><p>LMS (H.265)<span class="tag" lang="en">Available</span></p><p>NDI、SRT、SDI<span class="tag planned" lang="en">Planned</span></p></td></tr>
             <tr><th scope="row">出力</th><td><p>LMS、NDI (full NDI)<span class="tag" lang="en">Available</span></p><p>SRT、SDI<span class="tag planned" lang="en">Planned</span></p></td></tr>
-            <tr><th scope="row">推論</th><td>CDA-VSR (motion vector と残差を使う時系列の超解像)、SPANv2。重みは別に用意します</td></tr>
+            <tr><th scope="row">推論</th><td>CDA-VSR (motion vector と残差を使う時系列の超解像)、SPANv2。TensorRT で実行します。重みは配布物とは別に受け取ります</td></tr>
             <tr><th scope="row">frame rate</th><td>入力と同じ。frame rate は変換しません</td></tr>
             <tr><th scope="row">出力の大きさ</th><td>起動時に指定します。推論の結果の大きさと違う時は、送る前に resize します</td></tr>
             <tr><th scope="row">音声と timecode</th><td>音声を映像とずらさずに通します (既定は無効)。timecode は NDI の出力で運びます</td></tr>
+            <tr><th scope="row">起動</th><td>CLI の引数で部品の名前と出力の大きさを選びます。YAML の設定 file を併せて渡せ、同じ項目は引数の値を使います</td></tr>
+            <tr><th scope="row">LMS の受信の待ち</th><td><code>delay_ms</code> で選びます。書かなかった時は 100 ms です</td></tr>
+            <tr><th scope="row">停止</th><td>SIGINT または SIGTERM で、受け付けた処理を終えてから止まります。二回目の要求で残りの待ちを打ち切ります</td></tr>
             <tr><th scope="row">構成</th><td>1 process で 1 stream。GPU 一枚で動きます</td></tr>
             <tr><th scope="row">実行</th><td>C++ の application。実行に Python の環境を使いません</td></tr>
-            <tr><th scope="row">動作環境</th><td>Ubuntu 24.04 以降の Linux x86_64 (WSL2 を含む)、NVIDIA GPU (sm 86、sm 89、sm 120)、CUDA 13 に対応した driver、TensorRT</td></tr>
-            <tr><th scope="row">配布物</th><td>archive と deb。Windows から WSL の中の streamflow を起動する batch file が付きます。Windows で直接動く配布物は準備中です</td></tr>
+            <tr><th scope="row">動作環境</th><td>Ubuntu 24.04 以降の Linux x86_64 (WSL2 を含む)、NVIDIA GPU 一枚 (sm 86、sm 89、sm 120)、CUDA 13 に対応した NVIDIA の driver、TensorRT 11.2 以上</td></tr>
+            <tr><th scope="row">配布物</th><td>deb と archive の二つの形で、同じ prefix を持ちます。deb は <code>/opt/streamflow</code> に入り、apt が TensorRT の runtime と Avahi を入れます。Windows から WSL の中の streamflow を起動する batch file が付きます。Windows で直接動く配布物は準備中です</td></tr>
           </tbody>
         </table>
       </div>
