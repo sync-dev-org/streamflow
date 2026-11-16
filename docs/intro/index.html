@@ -305,8 +305,19 @@
       html { scroll-behavior: auto; }
     }
     @media print {
+      @page { size: A4; margin: 12mm; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .skip, .actions, .nav { display: none; }
-      .section { padding-block: 40px; }
+      .hero, .sec-head, .split { display: block; }
+      .hero { padding-block: 24px 32px; }
+      .hero-fig, .split > * + * { margin-top: 24px; }
+      .hero-fig { max-width: none; }
+      .sec-head > * + * { margin-top: 16px; }
+      .v-wide { display: block; }
+      .v-narrow { display: none; }
+      .section { padding-block: 32px; }
+      .label, h2, .sec-head { break-after: avoid; }
+      .sec-head { break-inside: avoid; }
       .fig, .code, .steps li, .points li, .cells > div, tr { break-inside: avoid; }
     }
   </style>
@@ -1104,16 +1115,19 @@
             <div class="code">
               <div class="code-head"><span>Install</span><span>bash</span></div>
 <pre><code><span class="p"># NVIDIA の CUDA の apt repository を登録した後</span>
-<span class="p">$</span> sudo apt install ./streamflow_<span class="v">X.Y.Z</span>_amd64.deb
+<span class="p">$</span> sudo apt install \
+    ./streamflow_<span class="v">X.Y.Z</span>_amd64.deb
 <span class="p">$</span> streamflow --help</code></pre>
             </div>
             <div class="code" style="margin-top:20px">
               <div class="code-head"><span>Run</span><span>bash</span></div>
 <pre><code><span class="p">$</span> streamflow --config live.yaml \
-    --input <span class="v">lms</span> --input-option connection.channel=1 \
-    --arch <span class="v">cda-vsr</span> --model ./weights.safetensors \
-    --output <span class="v">ndi</span> --width 1920 --height 1080 \
-    --audio</code></pre>
+    --input <span class="v">lms</span> \
+    --input-option connection.channel=1 \
+    --arch <span class="v">cda-vsr</span> \
+    --model ./weights.safetensors \
+    --output <span class="v">ndi</span> \
+    --width 1920 --height 1080 --audio</code></pre>
             </div>
             <p class="aside-note"><b>Windows から起動する</b> — 配布物には、Windows から WSL の中の streamflow を一回の操作で起動する batch file が、CDA-VSR 用と SPANv2 用に一つずつ付きます。使う model の batch file に LMS の ID、channel、<code>delay_ms</code> を渡すと、LMS の入力から ×2 の推論を経て NDI の出力へ送る引数を組み立てて起動します。WSL の distro の名前と重みの path は、batch file の先頭で変えられます。</p>
           </div>
