@@ -10,3 +10,6 @@ streamflow is a real-time video application. It receives a live video stream, up
 
 The [introduction page](https://sync-dev-org.github.io/streamflow/) explains how streamflow works, with diagrams of the pipeline, frame dropping, output timing, audio and timecode, and components.
 
+---
+
+Copyright © 2026 minamikik / sync.dev. All rights reserved.
