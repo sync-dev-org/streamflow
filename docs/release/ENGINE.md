@@ -1,8 +1,25 @@
 # CDA-VSR and SPANv2 checkpoints and engine cache
 
-This guide describes **v0.4.396**, the native C++ application. The deb and archive contain no model checkpoints, weights, or TensorRT engines. Receive a checkpoint supported by the selected inference module and its `SHA256SUMS` file from your provider, and verify the files as described in [INSTALL.md](INSTALL.md).
+This guide describes **v0.4.398**, the native C++ application. The deb and archive contain no model checkpoints, weights, or TensorRT engines. Receive a checkpoint supported by the selected inference module and its `SHA256SUMS` file from your provider, and verify the files as described in [INSTALL.md](INSTALL.md).
 
 Pass the safetensors checkpoint path with `--model PATH` or set `inference.model` in YAML. Relative argument paths start at the process's current directory; relative YAML model paths start at the configuration file's directory. Do not supply an engine path. The companion builds missing engines and manages the cache.
+
+## Included component versions
+
+The v0.4.398 native prefix uses the following component versions. TensorRT remains a host prerequisite; see [INSTALL.md](INSTALL.md).
+
+| Component | Version |
+|---|---|
+| pixtreme | 2.27.0 |
+| Transport core | 0.36.0 |
+| LMS input/output | 0.29.2 |
+| NDI output | 0.28.0 |
+| NVDEC | 0.11.2 |
+| NVENC | 0.10.0 |
+| Inference core | 0.26.0 |
+| CDA-VSR | 0.19.0 |
+| SPANv2 | 0.9.0 |
+| tensoracle | 2.6.1 |
 
 ## Prepare a CDA-VSR checkpoint
 

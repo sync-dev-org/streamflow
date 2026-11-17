@@ -1,4 +1,4 @@
-# Example configuration for the native C++ streamflow v0.4.396: LMS input to NDI output.
+# Example configuration for the native C++ streamflow v0.4.398: LMS input to NDI output.
 # The deb and archive include LMS input/output, NDI output, CDA-VSR, and SPANv2.
 # No Python environment or extras are required. See INSTALL.md for host requirements and installation.
 # The deb installs to /opt/streamflow and provides /usr/bin/streamflow.
@@ -23,11 +23,12 @@ input:
   frame_period: "1001/30000"    # Positive fraction. Fallback when VUI timing is absent or outside the eight periods below. Default: "1001/30000" seconds
   # Accepted VUI periods: 1/24, 1001/24000, 1/25, 1/30, 1001/30000, 1/50, 1/60, 1001/60000 seconds
   work_depth: 30                  # Integer 1..65535. Blocking buffer before decoding and decoder surfaces. Default: 30
-  audio_wait_frame_limit: 12       # Integer 1..65535. Maximum number of frames held while waiting for audio. Default: 12
   audio_trim_unit_samples: 240     # Integer 0..48000. Sample frames in one unit of audio trimmed by the receiving SDK. Default: 240
   # Sample frame counts are before multiplying by the channel count. At 48 kHz, 240 is 5 ms. 0 excludes the trimmed amount from the audio position
   # The default of 240 comes from observations with the pinned SDK and is not guaranteed by the vendor
   delay_ms: 100                   # Non-negative integer. Receive latency in ms. Default: 100
+  # input.audio_wait_frame_limit and --input-option audio_wait_frame_limit=... are rejected.
+  # Set the audio wait limit with output.audio.max_wait_ms instead; input does not wait for audio.
   # Set the depth of the drop buffer after decoding with pipeline.pre_buffer_depth
   # The core fills missing color information with legal, BT.709, and left
 
@@ -58,12 +59,14 @@ output:
   width: 1920                      # Required. Width of images placed in the post buffer
   height: 1080                     # Required. Height of images placed in the post buffer
   prefill_frames: 1                # Number of frames to accumulate before the output takes its first frame. Default: 1
-  follow_input:                    # Also accepted for LMS output. Omitted items use these defaults
+  follow_input:                    # Enabled by default for NDI and LMS. Adjusts transmission timing toward the target wait
     enabled: true                 # Boolean. When false, target and step values are ignored without validation
     target_buffer_wait_ms: 4       # Finite non-negative number. Target post buffer wait in ms
     max_step_ms: 0.1               # Finite positive number. Maximum timing adjustment per period in ms
   audio:
     enabled: false                # Pass input audio only when true. Default: false
+    # max_wait_ms: 0               # Optional finite number >= 0, in ms. Default: one actual input frame period
+    # At the limit, missing audio is filled with silence. 0 sends immediately with silence for missing audio
 
 # To select LMS output, replace the output section above with the following.
 # output:
@@ -78,6 +81,8 @@ output:
 #   prefill_frames: 1             # Non-negative integer. Default: 1
 #   audio:
 #     enabled: false              # Default: false
+#     # max_wait_ms: 0             # Optional finite number >= 0, in ms. Default: one actual input frame period
+#     # At the limit, missing audio is filled with silence. 0 sends without waiting
 #   video:
 #     bit_depth: 8                # Default: 8
 #     colorspace: Rec.709         # Default: Rec.709

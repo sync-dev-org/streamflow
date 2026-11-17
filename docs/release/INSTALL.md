@@ -1,6 +1,6 @@
 # streamflow インストールマニュアル
 
-対象バージョン: **0.4.396** / Linux x86_64・Ubuntu・WSL2
+対象バージョン: **0.4.398** / Linux x86_64・Ubuntu・WSL2
 
 受け取った配布ファイルの確認から、LMS の入力を CDA-VSR ×2 で処理して NDI へ出力する最初の起動までを説明します。操作は Ubuntu のターミナルで行います。Windows のコマンドプロンプトで行う操作は第 6 章に示します。
 
@@ -19,8 +19,8 @@
 
 | 受け取るファイル | 用途 |
 |---|---|
-| `streamflow_0.4.396_amd64.deb` | apt で導入する場合に使います |
-| `streamflow-0.4.396-linux_x86_64.tar.gz` | 展開して使う場合に使います |
+| `streamflow_0.4.398_amd64.deb` | apt で導入する場合に使います |
+| `streamflow-0.4.398-linux_x86_64.tar.gz` | 展開して使う場合に使います |
 | `cda-vsr-x2-ft_c6_p96_20261101_18k.safetensors` | CDA-VSR ×2 の checkpoint。deb / archive とは別のファイルです |
 | `SHA256SUMS` | 受け取ったファイルの SHA-256 を照合します |
 
@@ -79,7 +79,7 @@ apt-cache policy libnvinfer11
 受け取った deb のあるディレクトリで実行します。
 
 ```bash
-sudo apt install ./streamflow_0.4.396_amd64.deb
+sudo apt install ./streamflow_0.4.398_amd64.deb
 streamflow --help
 ```
 
@@ -105,8 +105,8 @@ checkpoint は同梱されません。設定と checkpoint は操作者が書き
 操作者が書き込める場所で展開します。第 2 章の apt リポジトリの登録後、依存パッケージも導入します。
 
 ```bash
-tar -xzf streamflow-0.4.396-linux_x86_64.tar.gz
-cd streamflow-0.4.396-linux_x86_64
+tar -xzf streamflow-0.4.398-linux_x86_64.tar.gz
+cd streamflow-0.4.398-linux_x86_64
 sha256sum --check SHA256SUMS
 sudo apt install libnvinfer11 libavahi-client3 libstdc++6 libgcc-s1 zlib1g avahi-daemon
 ./prefix/bin/streamflow --help
@@ -155,6 +155,8 @@ streamflow \
 
 `--audio` は出力の音声を有効にし、省略すると音声を送りません。CLI の `--model` に相対パスを書く場合は、実行したディレクトリが基点です。初回は GPU を使って不足する TensorRT engine を準備するため時間がかかります。
 
+音声の到着は出力の送信の直前に待ちます。待ちの上限は、省略時は入力の frame 周期一回分 (30000/1001 fps では約 33.4 ms) です。変更する場合は `--output-option audio.max_wait_ms=0` のように ms で指定します。0 は待たずに送り、届いていない音声を無音で埋めます。NDI と LMS の出力は、送信の時刻を post buffer の待ちに追従させる機能が既定で有効です。詳しい設定は [USAGE.md](USAGE.md#output) を参照してください。
+
 ## 5. YAML の設定ファイルで起動する
 
 第 4 章の `$HOME/streamflow` に、次の内容を `settings.yaml` として保存します。接続と映像の幅・高さは実際の値に替えます。
@@ -189,6 +191,8 @@ streamflow --config "$HOME/streamflow/settings.yaml"
 YAML の `inference.model` の相対パスは、設定ファイルのあるディレクトリが基点です。この例では `$HOME/streamflow/models/` の checkpoint を読みます。YAML 内はこの例の相対パスか、実際の絶対パスを使ってください。
 
 引数と設定ファイルを併用すると、同じ項目は引数が優先されます。たとえば `streamflow --config settings.yaml --width 1280 --height 720` は出力の大きさだけを替えます。入力・出力・推論の種類と、部品に必要な項目は引数または設定ファイルで指定します。全項目は [USAGE.md](USAGE.md)、設定例は [settings-example.yaml](settings-example.yaml) を参照してください。
+
+音声待ち上限の YAML の項目は `output.audio.max_wait_ms` です。操作者は 0 以上の有限の数を指定します。以前の `input.audio_wait_frame_limit` と `--input-option audio_wait_frame_limit=...` は受け付けず、指定すると最初の frame の前に停止して移行先を示します。以前の設定を使う場合は古い項目を除き、必要なら出力の待ち上限を ms で指定してください。
 
 ### 起動後の確認と停止
 
@@ -243,7 +247,7 @@ streamflow --help
 cat /opt/streamflow/share/streamflow/release.json
 ```
 
-バージョンは `0.4.396`、実行ファイルは `/opt/streamflow/bin/streamflow` です。archive は展開先で次を実行します。
+バージョンは `0.4.398`、実行ファイルは `/opt/streamflow/bin/streamflow` です。archive は展開先で次を実行します。
 
 ```bash
 ./prefix/bin/streamflow --help
@@ -264,7 +268,7 @@ sudo apt remove streamflow
 
 `sudo apt purge streamflow` も使用できます。操作者のディレクトリの設定と checkpoint は別に保管します。TensorRT や Avahi をほかのアプリケーションも使う場合は削除しないでください。
 
-archive は停止後に設定と checkpoint を退避し、展開した `streamflow-0.4.396-linux_x86_64` ディレクトリをファイルマネージャーなどで削除します。Windows の batch file の実行パスも不要なら削除・変更します。
+archive は停止後に設定と checkpoint を退避し、展開した `streamflow-0.4.398-linux_x86_64` ディレクトリをファイルマネージャーなどで削除します。Windows の batch file の実行パスも不要なら削除・変更します。
 
 engine cache は `$XDG_CACHE_HOME/tensoracle`、未設定なら `~/.cache/tensoracle` にあります。ほかのアプリケーションからも使われる場合があるため、streamflow と一緒に削除する必要はありません。checkpoint、入力サイズ、GPU、TensorRT などが変わると、次の起動で engine を作り直す場合があります。
 

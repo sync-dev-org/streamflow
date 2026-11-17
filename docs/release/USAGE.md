@@ -1,6 +1,6 @@
 # Using streamflow
 
-This reference describes **v0.4.396**, the native C++ application. streamflow selects an input module, inference, and an output module through command arguments and an optional YAML configuration file. Each process handles one stream on one GPU. The native prefix includes LMS input/output, NDI output, CDA-VSR and SPANv2. SRT input/output, NDI input, and SDI are not available in the standard distribution. See the [installation guide](INSTALL.md) for prerequisites and installation, [ENGINE.md](ENGINE.md) for checkpoint requirements, and [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for the measured scope and operational limitations.
+This reference describes **v0.4.398**, the native C++ application. streamflow selects an input module, inference, and an output module through command arguments and an optional YAML configuration file. Each process handles one stream on one GPU. The native prefix includes LMS input/output, NDI output, CDA-VSR and SPANv2. SRT input/output, NDI input, and SDI are not available in the standard distribution. See the [installation guide](INSTALL.md) for prerequisites and installation, [ENGINE.md](ENGINE.md) for checkpoint requirements, and [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for the measured scope and operational limitations.
 
 Obtain the deb or archive, a compatible checkpoint, and `SHA256SUMS` as files from your provider. Verify the received files as described in [INSTALL.md](INSTALL.md). The deb places the application in `/opt/streamflow`, callable as `/usr/bin/streamflow`; the archive provides `prefix/bin/streamflow`. In the commands below, replace `streamflow` with the absolute path to that archive executable when using an archive. Neither form requires a Python environment, uv, or a CUDA Toolkit installation to run. TensorRT and the NVIDIA driver are host prerequisites.
 
@@ -71,7 +71,6 @@ For `type: lms`, put connection settings in the `connection` mapping. streamflow
 | `connection.channel` | Integer `1..255` | Required | LMS channel. |
 | `frame_period` | Positive fraction string | `"1001/30000"` | Fallback frame period in seconds when the HEVC VUI has no timing or its period is outside the eight values accepted by LMS input. |
 | `work_depth` | Integer `1..65535` | `30` | Depth of the blocking buffer that holds encoded access units before decoding, and the number of decoder surfaces. |
-| `audio_wait_frame_limit` | Integer `1..65535` | `12` | Maximum number of frames held while waiting for audio. At the limit, the oldest frame is forwarded, with missing audio filled with silence. |
 | `audio_trim_unit_samples` | Integer `0..48000` | `240` | Number of sample frames in one unit of audio trimmed by the receiving SDK, before multiplying by the channel count. `0` excludes the trimmed amount from the audio position. |
 | `delay_ms` | Non-negative integer | `100` | LMS receive latency in ms: how long the LMS SDK waits on the receiving side. |
 
@@ -92,7 +91,6 @@ input:
     channel: 1
   frame_period: "1001/30000"
   work_depth: 30
-  audio_wait_frame_limit: 12
   audio_trim_unit_samples: 240
   delay_ms: 100
 ```
@@ -128,11 +126,16 @@ The following items are common to outputs. Item names in the table are relative 
 | `height` | Positive integer | Required | Height of images placed in the post buffer. Images are resized if the inference result has a different size. |
 | `prefill_frames` | Non-negative integer | `1` | Number of frames to accumulate before the output takes its first frame. |
 | `audio.enabled` | Boolean | `false` | Pass input audio together with the image only when `true`. |
+| `audio.max_wait_ms` | Finite non-negative number | One input frame period | Maximum wait in milliseconds for a frame's audio immediately before output transmission, shared by NDI and LMS. At the limit, missing audio is filled with silence. `0` sends immediately with silence for any missing audio. |
 | `follow_input.enabled` | Boolean | `true` | Follow input timing through the post buffer wait. |
 | `follow_input.target_buffer_wait_ms` | Finite non-negative number | `4` | Target post buffer wait in milliseconds. |
 | `follow_input.max_step_ms` | Finite positive number | `0.1` | Maximum transmission timing adjustment per period, in milliseconds. |
 
-The `follow_input` mapping configures outputs whose send period is controlled by the core, including NDI and LMS. Omitted items use the defaults above. When `enabled` is `false`, the target and step values are ignored without validation, and their defaults appear in the startup record. With follow enabled, invalid values stop startup before the first frame and identify the full setting path. The core checks period-dependent limits when the output is created with the first frame's actual period: the target must not exceed one period, and the step must not exceed half a period. Such errors include the actual period and the core's reason. Arguments override YAML values before validation; for example, `--output-option follow_input.enabled=false` disables follow for a preset.
+When `output.audio.max_wait_ms` is omitted, streamflow calculates one period from the input frame period when opening the output: about 33.367 ms at 30000/1001 fps or 40 ms at 25 fps. When the input period changes, streamflow recalculates the default for the reopened output. An explicit value stays unchanged. Negative and non-numeric values stop startup before the first frame and identify the setting and value. Use `--output-option audio.max_wait_ms=0.125` to override the configuration file. Input reception and inference do not wait for audio; the output fills any missing audio with silence when the wait expires and sends the accepted frame.
+
+`input.audio_wait_frame_limit` and `--input-option audio_wait_frame_limit=...` are no longer accepted. Either form stops startup before the first frame and directs you to `output.audio.max_wait_ms`.
+
+The `follow_input` mapping configures outputs whose send period is controlled by the core, including NDI and LMS. Follow is enabled by default: the core adjusts transmission timing toward a post buffer wait of 4 ms, by at most 0.1 ms per period. Omitted items use the defaults above. When `enabled` is `false`, the target and step values are ignored without validation, and their defaults appear in the startup record. With follow enabled, invalid values stop startup before the first frame and identify the full setting path. The core checks period-dependent limits when the output is created with the first frame's actual period: the target must not exceed one period, and the step must not exceed half a period. Such errors include the actual period and the core's reason. Arguments override YAML values before validation; for example, `--output-option follow_input.enabled=false` disables follow for a preset.
 
 streamflow creates and opens the output module after receiving the first frame, using that frame's `timing.input_number.frame_period`. When a later frame has a different period, streamflow waits for the previous output module to send its remaining frames, closes it, and opens a new output module and post buffer for the new period before forwarding that frame. Output is interrupted while the module is reopened. Frames with an unchanged period use the same output module; streamflow does not convert frame rates. `output.frame_rate` cannot be specified. If the core rejects `prefill_frames` and the post buffer depth, streamflow explains the error when the first frame arrives, before inference, including both configuration key names and values.
 
@@ -285,7 +288,7 @@ Post buffer insertion records retain only recent input numbers and missing-refer
 | `stopping` | None | Starts cleanup in response to a stop request. |
 | `stop.aborted` | None | A second or subsequent stop request aborted outstanding waits. |
 
-CDA-VSR also resets for the first frame, the first frame after an interruption, and HEVC I frames (`codec=hevc`, `slice_type=2`). Frames with the missing-reference flag set to true are also passed to inference and sent to the output. Input `FrameTiming`, audio, and ancillary data are placed in the output frame without changing their types or representations.
+CDA-VSR also resets for the first frame, the first frame after an interruption, and HEVC I frames (`codec=hevc`, `slice_type=2`). Frames with the missing-reference flag set to true are also passed to inference and sent to the output. Input timing and ancillary data are preserved in the output frame. With audio enabled, the frame retains its audio reference through inference; the output module resolves the audio immediately before transmission, subject to `output.audio.max_wait_ms`.
 
 `input.colour.observed` contains `range`, `matrix`, `colorspace`, `gamma`, and `chroma_siting`, using the color names returned by the core and `null` for unobserved values. `defaults_used` contains the fields and values that were filled in; `resolved` contains all resolved color fields. If no fields were filled in, `defaults_used` is `{}`. If the snapshot itself has no color information, all three fields are `null`, distinguishing this case from one where no defaults were needed.
 

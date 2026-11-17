@@ -1,6 +1,6 @@
 # streamflow 操作マニュアル
 
-対象 version は **0.4.396** です。streamflow は C++ の application で、一つの process が GPU 一枚で一つの stream を扱います。deb と archive は、LMS の入力と出力、NDI の出力、CDA-VSR と SPANv2 の推論に使う標準の部品を持ちます。
+対象 version は **0.4.398** です。streamflow は C++ の application で、一つの process が GPU 一枚で一つの stream を扱います。deb と archive は、LMS の入力と出力、NDI の出力、CDA-VSR と SPANv2 の推論に使う標準の部品を持ちます。
 
 ## 導入
 
@@ -11,7 +11,7 @@ Ubuntu 24.04 以降の Linux x86_64 (WSL2 を含む) と、CUDA 13 に対応す�
 続いて、[INSTALL.md](INSTALL.md) の第 2 章に従い、host の Ubuntu の version に合う NVIDIA の CUDA apt repository を登録します。Ubuntu 24.04 は `ubuntu2404`、Ubuntu 26.04 は `ubuntu2604` の repository を使います。WSL2 でも同じで、`wsl-ubuntu` の repository は TensorRT を持たないので使いません。その後、受け取った deb を次の一回の command で導入します。
 
 ```bash
-sudo apt install ./streamflow_0.4.396_amd64.deb
+sudo apt install ./streamflow_0.4.398_amd64.deb
 streamflow --help
 ```
 
@@ -24,6 +24,12 @@ apt は TensorRT の runtime (`libnvinfer11`、11.2 以上)、NDI が使う Avah
 重みは deb と archive に入りません。操作者は、提供者から受け取った CDA-VSR ×2 の safetensors の checkpoint を、受け取った `SHA256SUMS` と照合して使います。SPANv2 には SPANv2 の checkpoint を使います。操作者は checkpoint の中身や metadata を書き換えません。互換性の条件は [ENGINE.md](ENGINE.md) を参照します。
 
 操作者は、書込み可能な作業 directory に設定 file と重みを置きます。[settings-example.yaml](settings-example.yaml) をコピーし、LMS の接続先と channel、password、重みの path、入出力の寸法を実際の値に替えます。重みの相対 path は設定 file の directory から解決します。詳しい設定は [USAGE.md](USAGE.md) を参照します。
+
+音声を出力する時は、操作者が `--audio` または `output.audio.enabled: true` を指定します。入力と推論は音声の到着を待たず、出力 module が送信の直前に画に対応する音声を確定します。音声を待つ時間の上限は `output.audio.max_wait_ms` で指定し、省略時は入力の frame 周期一回分 (30000/1001 fps では約 33.4 ms) です。0 は待たずに送る指定で、上限までに届かなかった音声は無音で埋めます。操作者は 0 以上の有限の数を指定します。負の数や数でない値を指定すると、streamflow は最初の frame の前に止まります。
+
+`input.audio_wait_frame_limit` と `--input-option audio_wait_frame_limit=...` は受け付けません。操作者は以前の設定からこの項目を除き、必要なら出力の `output.audio.max_wait_ms` を ms で指定します。streamflow は古い項目を受け取ると、移行先を示して最初の frame の前に止まります。
+
+NDI と LMS の出力では、送信の時刻を post buffer の待ちに追従させる機能が既定で有効です。目標の待ちは 4 ms、一周期あたりの補正の上限は 0.1 ms です。操作者は `output.follow_input.enabled: false`、または `--output-option follow_input.enabled=false` で追従を無効にできます。
 
 960×540 の入力を CDA-VSR ×2 で 1920×1080 にして NDI に送る例は次の形です。
 
@@ -71,6 +77,6 @@ streamflow は、一行に一つの JSON で進捗、出来事、最後の統計
 | 1 | 運転中の異常、または停止の待ちの打切り |
 | 2 | 引数、設定、部品、重みなどによる起動の失敗 |
 
-起動の失敗で終了 code 2 になった場合、`summary` は出ません。操作者は標準エラーの項目と理由を読み、設定や実行環境を直して起動し直します。既知の制限と過去の性能計測の範囲は [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) を参照します。
+起動の失敗で終了 code 2 になった場合、`summary` は出ません。操作者は標準エラーの項目と理由を読み、設定や実行環境を直して起動し直します。既知の制限と各 version の性能・遅延の計測条件は [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) を参照します。
 
 Copyright © 2026 minamikik / sync.dev. All rights reserved.
