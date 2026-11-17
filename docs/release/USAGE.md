@@ -68,7 +68,7 @@ For `type: lms`, put connection settings in the `connection` mapping. streamflow
 |---|---|---|---|
 | `connection.id` | String | Required | LMS connection ID. Exactly 8 characters: three lowercase letters, a hyphen, and four lowercase letters (for example `abc-defg`). |
 | `connection.password` | String | Required | LMS connection password. At most 8 ASCII characters; an empty value is allowed. Spaces and symbols are passed unchanged. |
-| `connection.channel` | Integer `1..255` | Required | LMS channel. |
+| `connection.channel` | Integer `1..255` | Required | LMS channel. The channels a connection ID may use are set by that ID's LMS contract, and video and audio can allow different numbers of channels. For a video channel above the allowance, the LMS service accepts the connection and then reports `Channel has exceeded the allowed number!`; no video is delivered. |
 | `frame_period` | Positive fraction string | `"1001/30000"` | Fallback frame period in seconds when the HEVC VUI has no timing or its period is outside the eight values accepted by LMS input. |
 | `work_depth` | Integer `1..65535` | `30` | Depth of the blocking buffer that holds encoded access units before decoding, and the number of decoder surfaces. |
 | `audio_trim_unit_samples` | Integer `0..48000` | `240` | Number of sample frames in one unit of audio trimmed by the receiving SDK, before multiplying by the channel count. `0` excludes the trimmed amount from the audio position. |
@@ -164,7 +164,7 @@ LMS output always uses 0 for the acquisition timestamp passed to the SDK.
 |---|---|---|---|
 | `connection.id` | String | Required | LMS connection ID. Exactly 8 characters: three lowercase letters, a hyphen, and four lowercase letters (for example `abc-defg`). |
 | `connection.password` | String | Required | LMS connection password. At most 8 ASCII characters; an empty value is allowed. |
-| `connection.channel` | Integer `1..255` | Required | LMS channel. |
+| `connection.channel` | Integer `1..255` | Required | LMS channel. The channels a connection ID may use are set by that ID's LMS contract, and video and audio can allow different numbers of channels. For a video channel above the allowance, the LMS service accepts the connection and then reports `Channel has exceeded the allowed number!`; no video is delivered. |
 | `video.bit_depth` | Integer | `8` | Output bit depth. |
 | `video.colorspace` | String | `Rec.709` | Output colorspace. |
 | `video.gamma` | String | `Rec.709` | Output gamma. |

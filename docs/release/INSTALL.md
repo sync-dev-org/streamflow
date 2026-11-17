@@ -2,6 +2,8 @@
 
 対象バージョン: **0.4.398** / Linux x86_64・Ubuntu・WSL2
 
+Windows x86_64 の zip / MSI を使う場合は [Windows への導入](#native-windows)を参照してください。
+
 受け取った配布ファイルの確認から、LMS の入力を CDA-VSR ×2 で処理して NDI へ出力する最初の起動までを説明します。操作は Ubuntu のターミナルで行います。Windows のコマンドプロンプトで行う操作は第 6 章に示します。
 
 ## 1. 対象環境と受け取るファイル
@@ -289,5 +291,100 @@ engine cache は `$XDG_CACHE_HOME/tensoracle`、未設定なら `~/.cache/tensor
 | 設定や部品のエラー | 診断された項目と部品を [USAGE.md](USAGE.md) と照合し、設定を直して起動し直します |
 
 問い合わせる際は、配布物のバージョン、Ubuntu / WSL2 の別、起動コマンドまたは設定、表示された診断を添えてください。
+
+<a id="native-windows"></a>
+
+## 9. Windows への導入
+
+Windows x86_64 用の zip と MSI は、同じ実行ファイルと標準部品 (LMS、NDI、CDA-VSR、SPANv2) を持ちます。streamflow の実行に Python、Visual Studio、CUDA Toolkit、WiX の導入は必要ありません。設定と checkpoint は操作者が書き込めるフォルダーに別途置きます。
+
+### host の準備
+
+| 項目 | 導入する物 |
+|---|---|
+| NVIDIA ドライバー | GPU に対応する CUDA 13 対応の Windows 用ドライバー。CUDA 13 系の互換性の下限は R580 系です。使用する TensorRT の条件も確認してください |
+| TensorRT | この build が使用する SDK は **11.2.1.2**。Windows x64 / CUDA 13 用の runtime を導入し、`nvinfer_11.dll` のある `lib` フォルダーを PATH に追加します |
+| MSVC Redistributable | Microsoft Visual C++ v14 **x64**。build tools (MSVC 19.44 / toolset 14.44) 以上の版を使います。Microsoft が提供する最新の対応版を導入してください |
+| Desktop Video | DeckLink を使う構成で必要になる Blackmagic の機器用ドライバーです。この配布物の標準部品には SDI module を含めていません |
+
+NVIDIA ドライバーは [NVIDIA の配布ページ](https://www.nvidia.com/drivers/)から GPU に合う物を選びます。[CUDA の driver 互換性](https://docs.nvidia.com/deploy/cuda-compatibility/minor-version-compatibility.html)も確認してください。MSVC Redistributable は [Microsoft の手順と x64 の配布先](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist/)から導入します。MSVC の C++ runtime DLL は streamflow の配布物に含めません。
+
+利用者は [NVIDIA の Windows 用 zip の導入手順](https://docs.nvidia.com/deeplearning/tensorrt/latest/installing-tensorrt/install-zip.html)に従い、CUDA 13 用の TensorRT の zip を展開します。`nvinfer_11.dll` 一つだけをコピーせず、engine の準備に使う builder resource なども含めて配置します。Windows の「環境変数」で、その DLL を持つフォルダーを PATH に追加し、新しいターミナルを開きます。全 user で使う場合は、各 user がそのフォルダーを読み取れ、各 user の PATH から見つかるようにします。
+
+```bat
+where nvinfer_11.dll
+```
+
+streamflow と MSI は、PATH の順に要求する DLL を探し、最初に見つかったフォルダーを使います。TensorRT 10 系だけでは起動も MSI の導入もできません。配布物が要求する DLL 名と SDK の version は `share\streamflow\windows-runtime.json`、配布物の version と source commit は `share\streamflow\release.json` に記録します。
+
+MSI は導入を始めた user の Machine と User の環境変数から PATH を組み立てるため、コマンドプロンプトでその process だけに追加した PATH は使いません。
+
+NVIDIA ドライバー、TensorRT、Desktop Video、MSVC Redistributable は host の前提です。zip と MSI はそれらを導入・削除しません。Windows の確認環境は Windows 11 Pro for Workstations 10.0.22631、Visual Studio 2022 17.14 / MSVC 19.44、CUDA 13.2、TensorRT 11.2.1.2、NDI SDK 6.3.2 です。Windows の version の下限をこの確認環境から定めるものではありません。
+
+### 配布ファイルを確認する
+
+受け取った `streamflow-X.Y.Z-windows_x86_64.zip` または `.msi` と `SHA256SUMS` を同じフォルダーに置きます。PowerShell で SHA-256 を計算し、`SHA256SUMS` に書かれた同じファイル名の値と比較します。
+
+```powershell
+Get-FileHash .\streamflow-X.Y.Z-windows_x86_64.msi -Algorithm SHA256
+Get-Content .\SHA256SUMS
+```
+
+値が違う場合は導入を進めず、同じ配布分のファイルを受け取り直します。checkpoint は配布物と別のファイルであり、その checksum も確認します。
+
+### MSI を使う
+
+MSI はその PC の全 user に導入し、管理者の権限を求めます。既定の導入先は `C:\Program Files\streamflow` です。MSI は導入先の `bin` を system の PATH に追加し、`bin\streamflow.exe` の受信を許す Windows Defender Firewall の規則を全 profile に追加します。
+
+管理者の権限を持たない user は zip を使ってください。zip 自体の展開には管理者の権限は要りません。受信を許す firewall の規則は、管理者に追加を依頼してください。
+
+MSI に code signing は行っていません。SmartScreen などが発行元を確認できないと表示する場合があります。受け取った配布元と checksum を確認して操作してください。
+
+TensorRT の DLL が PATH から見つからない場合、MSI は入手先を表示して導入を止めます。host の準備を済ませ、新しいターミナルまたは Explorer から再実行してください。
+
+コマンドから導入する場合は、管理者のターミナルで実行します。
+
+```bat
+msiexec /i streamflow-X.Y.Z-windows_x86_64.msi /qn /norestart /L*v install.log
+```
+
+導入後は新しいターミナルを開き、`streamflow --help` を実行します。削除は Windows の「インストールされているアプリ」から streamflow を選ぶか、`msiexec /x streamflow-X.Y.Z-windows_x86_64.msi` で行います。削除にも管理者の権限が必要です。MSI は自分が導入したファイル、system の PATH への追加、firewall の規則を削除します。別に置いた設定と checkpoint は残ります。
+
+### zip を使う
+
+操作者が書き込める新しいフォルダーに zip 全体を展開します。PowerShell の例です。
+
+```powershell
+Expand-Archive .\streamflow-X.Y.Z-windows_x86_64.zip -DestinationPath .\streamflow-unpacked
+& .\streamflow-unpacked\streamflow-X.Y.Z-windows_x86_64\bin\streamflow.exe --help
+```
+
+zip は PATH を変更しません。実行ファイルの絶対パスを使うか、必要に応じて展開先の `bin` を自分の PATH に追加します。移動する時は展開したフォルダー全体を移動し、`bin` や DLL だけを取り出さないでください。削除する時は streamflow を停止し、設定と checkpoint を退避してから展開先を削除します。手動で追加した PATH も取り除きます。
+
+zip は firewall の規則を追加しません。LMS などの入力を受信するには、次の手順で規則を追加してください。
+
+### firewall の規則を手動で追加する
+
+管理者として PowerShell を開き、`$program` に実際の `streamflow.exe` の絶対 path を指定します。次の例は MSI の既定の導入先です。zip を使う場合は展開先の `bin\streamflow.exe` に置き換えます。
+
+```powershell
+$program = (Resolve-Path 'C:\Program Files\streamflow\bin\streamflow.exe').Path
+New-NetFirewallRule -Name 'streamflow-manual-inbound' -DisplayName 'streamflow manual inbound' `
+  -Direction Inbound -Action Allow -Program $program -Profile Any
+```
+
+この規則は指定した実行ファイルの受信だけを許可します。すべての program に対して port を開く規則ではありません。MSI が追加する規則の表示名は `streamflow MSI inbound` です。MSI が規則を追加済みの場合、手動で規則を重ねる必要はありません。
+
+手動で追加した規則は MSI の uninstall や zip の削除では消えません。配布物を削除する時は、管理者の PowerShell で次の command を実行します。zip の展開先を移動した時は、古い規則を削除し、新しい絶対 path で追加し直してください。
+
+```powershell
+Remove-NetFirewallRule -Name 'streamflow-manual-inbound'
+```
+
+### 起動と NDI の通知
+
+[設定例](settings-example.yaml)を操作者のフォルダーに置き、接続値と checkpoint の path を編集して `streamflow --config settings.yaml` で起動します。YAML の model の相対 path は設定ファイルからの相対です。Windows の絶対 path には `C:/Users/.../model.safetensors` のように slash を使えます。`--help` の成功は起動の確認です。GPU の推論や接続の確認は別に行います。[利用方法](USAGE.md)と[既知の制限](KNOWN_LIMITATIONS.md)も参照してください。
+
+streamflow は [NDI](https://ndi.video/) の技術を使用します。NDI® is a registered trademark of Vizrt NDI AB. NDI SDK 6.3.2 の Windows の runtime とともに、`pixtreme\transport\ndi\_ndi\Processing.NDI.Lib.Licenses.txt` を同梱します。NDI の利用条件と第三者の通知はこのファイルで確認できます。各部品の license と出どころは `share\streamflow\packages\` にあります。
 
 Copyright © 2026 minamikik / sync.dev. All rights reserved.
