@@ -155,9 +155,6 @@
     .legend i.drop { background: var(--drop-soft); border: 1px dashed var(--drop); }
     .legend i.hold { background: var(--hold-soft); border-color: var(--hold); }
     .legend i.dash { width: 22px; height: 0; border: 0; border-top: 2px dashed var(--accent); border-radius: 0; background: none; }
-    .legend i.line { width: 22px; height: 0; border: 0; border-top: 3px solid var(--accent); border-radius: 0; background: none; }
-    .legend i.line-free { width: 22px; height: 0; border: 0; border-top: 2px solid var(--faint); border-radius: 0; background: none; }
-    .legend i.dot { width: 10px; height: 10px; border-radius: 50%; border: 0; background: var(--hold); }
 
     /* diagram vocabulary (inline SVG) */
     .d text { fill: var(--ink); font-family: var(--sans); font-size: 15px; }
@@ -200,12 +197,6 @@
     .d .wave { fill: none; stroke: var(--accent); stroke-width: 1.5; }
     .d .wave-drop { fill: none; stroke: var(--drop); stroke-width: 1.5; opacity: .7; }
     .d .wave-silent { fill: none; stroke: var(--hold); stroke-width: 1.5; }
-    .d .band-drop { fill: var(--drop-soft); }
-    .d .band-hold { fill: var(--hold-soft); }
-    .d .target { fill: none; stroke: var(--accent); stroke-dasharray: 6 5; }
-    .d .line-follow { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; }
-    .d .line-free { fill: none; stroke: var(--faint); stroke-width: 2; stroke-linejoin: round; }
-    .d .dot-hold { fill: var(--hold); }
 
     /* blocks */
     .cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 48px; border-top: 1px solid var(--line); }
@@ -432,7 +423,7 @@
 
     <div class="strip wrap" aria-label="streamflow の特長">
       <div><span class="k">01</span><b>GPU で超解像を実時間に</b><span>CDA-VSR · SPANv2 · TensorRT</span></div>
-      <div><span class="k">02</span><b>出力の周期を守り、止めない</b><span>drop · repeat · follow</span></div>
+      <div><span class="k">02</span><b>出力の周期を守り、止めない</b><span>drop · repeat · fixed delay</span></div>
       <div><span class="k">03</span><b>一つの C++ の application</b><span>実行に Python を使わない</span></div>
     </div>
 
@@ -441,7 +432,7 @@
         <div class="sec-head">
           <div>
             <p class="label"><span class="num">01</span><span lang="en">Pipeline</span></p>
-            <h2 id="pipeline-title" lang="en">Four threads,<br>two buffers, <span class="nw">one stream.</span></h2>
+            <h2 id="pipeline-title" lang="en">Three threads,<br>two buffers, <span class="nw">one stream.</span></h2>
           </div>
           <p class="lead">streamflow は、一つの process で一本の stream を扱います。受信、処理、送信を別々の thread に分け、間に置いた buffer で受け渡します。どこかの段が一瞬遅れても、ほかの段は自分の周期で動き続けます。</p>
         </div>
@@ -449,10 +440,10 @@
         <figure class="fig">
           <svg class="d v-wide" viewBox="0 0 1120 312" role="img" aria-labelledby="f2w-t f2w-d">
             <title id="f2w-t">入力 module から出力 module までの流れ</title>
-            <desc id="f2w-d">入力 module の thread R が受信、decode、色の変換を行い、pre buffer へ入れる。streamflow の thread P が色の変換、CDA-VSR または SPANv2 の推論、出力の大きさへの resize を行い、post buffer へ入れる。出力 module の thread E が encode し、thread S が一周期に一枚送る。decode で取り出した motion vector と残差は推論へ渡る。</desc>
+            <desc id="f2w-d">入力 module の thread R が受信、decode、色の変換を行い、pre buffer へ入れる。streamflow の thread P が色の変換、CDA-VSR または SPANv2 の推論、出力の大きさへの resize を行い、post buffer へ入れる。出力 module の thread S が一周期に一枚を選び、encode する出力 (LMS) では同じ周期の中で encode して送る。decode で取り出した motion vector と残差は推論へ渡る。</desc>
             <text class="t-label" x="0" y="20">THREAD R</text>
             <text class="t-label" x="432" y="20">THREAD P</text>
-            <text class="t-label" x="892" y="20">THREAD E · S</text>
+            <text class="t-label" x="892" y="20">THREAD S</text>
 
             <rect class="box" x=".75" y="36" width="270" height="220" rx="8"/>
             <text class="t-lg" x="20" y="68">入力 module</text>
@@ -494,20 +485,18 @@
             <text class="t-lg" x="912" y="68">出力 module</text>
             <text class="t-sm t-muted" x="912" y="90">encode と送信を受け持つ</text>
             <rect class="chip" x="912" y="108" width="188" height="34" rx="4"/>
-            <text class="t-md" x="928" y="130">encode (LMS)</text>
-            <text class="t-label" x="1088" y="129" text-anchor="end">E</text>
+            <text class="t-md" x="928" y="130">一周期に一枚選ぶ</text>
             <rect class="chip" x="912" y="150" width="188" height="34" rx="4"/>
-            <text class="t-md" x="928" y="172">送信の直前の buffer</text>
+            <text class="t-md" x="928" y="172">encode (LMS)</text>
             <rect class="chip" x="912" y="192" width="188" height="34" rx="4"/>
-            <text class="t-md" x="928" y="214">一周期に一枚送る</text>
-            <text class="t-label" x="1088" y="213" text-anchor="end">S</text>
+            <text class="t-md" x="928" y="214">同じ周期の中で送る</text>
 
             <path class="wire-dash" d="M135 258V296H582V263" marker-end="url(#ah)"/>
             <text class="t-sm t-accent" x="160" y="288">side data: motion vector と残差 → CDA-VSR</text>
           </svg>
           <svg class="d v-narrow" viewBox="0 0 340 810" role="img" aria-labelledby="f2n-t f2n-d">
             <title id="f2n-t">入力 module から出力 module までの流れ</title>
-            <desc id="f2n-d">入力 module の thread R が受信、decode、色の変換を行い、pre buffer へ入れる。streamflow の thread P が色の変換、CDA-VSR または SPANv2 の推論、出力の大きさへの resize を行い、post buffer へ入れる。出力 module の thread E が encode し、thread S が一周期に一枚送る。decode で取り出した motion vector と残差は推論へ渡る。</desc>
+            <desc id="f2n-d">入力 module の thread R が受信、decode、色の変換を行い、pre buffer へ入れる。streamflow の thread P が色の変換、CDA-VSR または SPANv2 の推論、出力の大きさへの resize を行い、post buffer へ入れる。出力 module の thread S が一周期に一枚を選び、encode する出力 (LMS) では同じ周期の中で encode して送る。decode で取り出した motion vector と残差は推論へ渡る。</desc>
             <rect class="box" x=".75" y=".75" width="338.5" height="195" rx="8"/>
             <text class="t-lg" x="16" y="28">入力 module</text>
             <text class="t-label" x="324" y="27" text-anchor="end">THREAD R</text>
@@ -550,16 +539,14 @@
 
             <rect class="box" x=".75" y="630" width="338.5" height="176" rx="8"/>
             <text class="t-lg" x="16" y="658">出力 module</text>
-            <text class="t-label" x="324" y="657" text-anchor="end">THREAD E · S</text>
+            <text class="t-label" x="324" y="657" text-anchor="end">THREAD S</text>
             <text class="t-sm t-muted" x="16" y="680">encode と送信を受け持つ</text>
             <rect class="chip" x="16" y="694" width="308" height="30" rx="4"/>
-            <text class="t-md" x="30" y="714">encode (LMS)</text>
-            <text class="t-label" x="310" y="713" text-anchor="end">E</text>
+            <text class="t-md" x="30" y="714">一周期に一枚選ぶ</text>
             <rect class="chip" x="16" y="730" width="308" height="30" rx="4"/>
-            <text class="t-md" x="30" y="750">送信の直前の buffer</text>
+            <text class="t-md" x="30" y="750">encode (LMS)</text>
             <rect class="chip" x="16" y="766" width="308" height="30" rx="4"/>
-            <text class="t-md" x="30" y="786">一周期に一枚送る</text>
-            <text class="t-label" x="310" y="785" text-anchor="end">S</text>
+            <text class="t-md" x="30" y="786">同じ周期の中で送る</text>
           </svg>
           <div class="legend" aria-hidden="true">
             <span><i class="on"></i>streamflow の処理</span>
@@ -567,14 +554,14 @@
             <span><i></i>drop buffer の枠</span>
             <span><i class="dash"></i>side data</span>
           </div>
-          <figcaption><span class="fig-no" lang="en">Fig. 2</span><span>入力 module から出力 module までの流れ。encode しない出力 (NDI) では、thread S が post buffer から直接取って送ります。入力 module と出力 module は、pixtreme.transport の module です。</span></figcaption>
+          <figcaption><span class="fig-no" lang="en">Fig. 2</span><span>入力 module から出力 module までの流れ。encode しない出力 (NDI) では、thread S が選んだ画を encode せずに送ります。入力 module と出力 module は、pixtreme.transport の module です。</span></figcaption>
         </figure>
 
         <div class="cells">
           <div><p class="label" lang="en">Thread R</p><h3>受信と decode</h3><p>入力 module が、受信、decode、色の変換を受け持ちます。CDA-VSR を使う時は、decode で取り出した motion vector と残差 (side data) を frame と一緒に渡します。</p></div>
           <div><p class="label" lang="en">Thread P</p><h3>超解像と resize</h3><p>streamflow の C++ の thread が、画像処理の library の pixtreme で色を変換し、CDA-VSR または SPANv2 で推論して、起動時に決めた出力の大きさへ揃えます。</p></div>
-          <div><p class="label" lang="en">Thread E · S</p><h3>encode と送信</h3><p>出力 module が、encode と送信を受け持ちます。thread S は一周期に一枚ずつ、出力の側の clock で送り出します。</p></div>
-          <div><p class="label" lang="en">Buffers</p><h3>短い buffer</h3><p>pre buffer と post buffer は、満杯の時に最も古い frame を捨てる drop buffer です。待ちを溜め込まず、遅れを後へ持ち越しません。二つの buffer の深さは設定 file で変えられます。</p></div>
+          <div><p class="label" lang="en">Thread S</p><h3>encode と送信</h3><p>出力 module が、encode と送信を受け持ちます。thread S は一周期に一枚ずつ、出力の側の clock で送り出します。</p></div>
+          <div><p class="label" lang="en">Buffers</p><h3>短い buffer</h3><p>pre buffer と post buffer は、満杯の時に最も古い frame を捨てる drop buffer です。待ちを溜め込まず、遅れを後へ持ち越しません。post buffer の枚数 N は、出力の遅延 <span class="nw">D = N × 一周期</span> を決めます。二つの buffer の枚数は、起動の引数か設定 file で変えられます。</p></div>
         </div>
       </div>
     </section>
@@ -592,7 +579,7 @@
         <figure class="fig">
           <svg class="d v-wide" viewBox="0 0 1120 330" role="img" aria-labelledby="f3w-t f3w-d">
             <title id="f3w-t">処理の遅れと入力の途切れがあっても、出力は周期ごとに続く</title>
-            <desc id="f3w-d">入力の frame 1 から 7 が周期ごとに届き、少し間を空けて 8 が届く。thread P が 3 の処理に時間を掛けた間に、pre buffer は 4 を捨てる。出力は周期ごとに 1、2、2、3、5、6、7、7、8 を送り、送る frame が無い周期では最後の画を無音で繰り返す。</desc>
+            <desc id="f3w-d">入力の frame 1 から 6 が周期ごとに届き、一周期の途切れの後に 7 が届く。出力は各 frame を、受け取ってから二周期の後の枠で送る。thread P が 3 の処理に時間を掛けた間に、pre buffer は 4 を捨てる。3 は自分の枠の時刻に間に合わず、送らずに捨てる。出力は周期ごとに 1、2、2、2、5、6、6、7 を送り、送る frame が無い周期では最後の画を無音で繰り返す。</desc>
             <text class="t-md t-strong" x="0" y="76">入力 module</text>
             <text class="t-sm t-muted" x="0" y="96">decode の後の frame</text>
             <text class="t-md t-strong" x="0" y="164">thread P</text>
@@ -601,8 +588,8 @@
             <text class="t-sm t-muted" x="0" y="272">一周期に一枚送る</text>
 
             <text class="t-sm t-drop" x="484" y="44" text-anchor="middle">pre buffer で捨てる</text>
-            <path class="rule" d="M814 46V40H960V46"/>
-            <text class="t-sm t-muted" x="887" y="32" text-anchor="middle">入力が途切れる</text>
+            <path class="rule" d="M722 46V40H798V46"/>
+            <text class="t-sm t-muted" x="760" y="32" text-anchor="middle">入力が途切れる</text>
 
             <rect class="frame" x="170" y="56" width="76" height="44" rx="4"/>
             <rect class="frame" x="262" y="56" width="76" height="44" rx="4"/>
@@ -610,61 +597,55 @@
             <rect class="frame-drop" x="446" y="56" width="76" height="44" rx="4"/>
             <rect class="frame" x="538" y="56" width="76" height="44" rx="4"/>
             <rect class="frame" x="630" y="56" width="76" height="44" rx="4"/>
-            <rect class="frame" x="722" y="56" width="76" height="44" rx="4"/>
-            <rect class="frame" x="976" y="56" width="76" height="44" rx="4"/>
+            <rect class="frame" x="814" y="56" width="76" height="44" rx="4"/>
             <text class="t-num" x="208" y="83" text-anchor="middle">1</text>
             <text class="t-num" x="300" y="83" text-anchor="middle">2</text>
             <text class="t-num" x="392" y="83" text-anchor="middle">3</text>
             <text class="t-num t-drop" x="484" y="83" text-anchor="middle">4</text>
             <text class="t-num" x="576" y="83" text-anchor="middle">5</text>
             <text class="t-num" x="668" y="83" text-anchor="middle">6</text>
-            <text class="t-num" x="760" y="83" text-anchor="middle">7</text>
-            <text class="t-num" x="1014" y="83" text-anchor="middle">8</text>
+            <text class="t-num" x="852" y="83" text-anchor="middle">7</text>
 
             <rect class="frame-on" x="180" y="144" width="56" height="44" rx="4"/>
             <rect class="frame-on" x="272" y="144" width="56" height="44" rx="4"/>
-            <rect class="frame-on" x="364" y="144" width="184" height="44" rx="4"/>
+            <rect class="frame-drop" x="364" y="144" width="184" height="44" rx="4"/>
             <rect class="frame-on" x="566" y="144" width="56" height="44" rx="4"/>
             <rect class="frame-on" x="640" y="144" width="56" height="44" rx="4"/>
-            <rect class="frame-on" x="732" y="144" width="56" height="44" rx="4"/>
-            <rect class="frame-on" x="980" y="144" width="40" height="44" rx="4"/>
+            <rect class="frame-on" x="824" y="144" width="40" height="44" rx="4"/>
             <text class="t-num" x="208" y="171" text-anchor="middle">1</text>
             <text class="t-num" x="300" y="171" text-anchor="middle">2</text>
-            <text class="t-num" x="456" y="171" text-anchor="middle">3</text>
+            <text class="t-num t-drop" x="456" y="171" text-anchor="middle">3</text>
             <text class="t-num" x="594" y="171" text-anchor="middle">5</text>
             <text class="t-num" x="668" y="171" text-anchor="middle">6</text>
-            <text class="t-num" x="760" y="171" text-anchor="middle">7</text>
-            <text class="t-num" x="1000" y="171" text-anchor="middle">8</text>
-            <text class="t-sm t-muted" x="456" y="210" text-anchor="middle">処理が遅れる</text>
+            <text class="t-num" x="844" y="171" text-anchor="middle">7</text>
+            <text class="t-sm t-drop" x="456" y="210" text-anchor="middle">処理が遅れ、間に合わずに捨てる</text>
 
-            <path class="grid" d="M300 222V290M392 222V290M484 222V290M576 222V290M668 222V290M760 222V290M852 222V290M944 222V290M1036 222V290"/>
-            <rect class="frame-on" x="300" y="232" width="76" height="44" rx="4"/>
-            <rect class="frame-on" x="392" y="232" width="76" height="44" rx="4"/>
-            <rect class="frame-hold" x="484" y="232" width="76" height="44" rx="4"/>
-            <rect class="frame-on" x="576" y="232" width="76" height="44" rx="4"/>
-            <rect class="frame-on" x="668" y="232" width="76" height="44" rx="4"/>
-            <rect class="frame-on" x="760" y="232" width="76" height="44" rx="4"/>
-            <rect class="frame-on" x="852" y="232" width="76" height="44" rx="4"/>
-            <rect class="frame-hold" x="944" y="232" width="76" height="44" rx="4"/>
-            <rect class="frame-on" x="1036" y="232" width="76" height="44" rx="4"/>
-            <text class="t-num" x="338" y="259" text-anchor="middle">1</text>
-            <text class="t-num" x="430" y="259" text-anchor="middle">2</text>
-            <text class="t-num t-hold" x="522" y="259" text-anchor="middle">2</text>
-            <text class="t-num" x="614" y="259" text-anchor="middle">3</text>
-            <text class="t-num" x="706" y="259" text-anchor="middle">5</text>
-            <text class="t-num" x="798" y="259" text-anchor="middle">6</text>
-            <text class="t-num" x="890" y="259" text-anchor="middle">7</text>
-            <text class="t-num t-hold" x="982" y="259" text-anchor="middle">7</text>
-            <text class="t-num" x="1074" y="259" text-anchor="middle">8</text>
-            <text class="t-sm t-hold" x="522" y="296" text-anchor="middle">最後の画 + 無音</text>
-            <text class="t-sm t-hold" x="982" y="296" text-anchor="middle">最後の画 + 無音</text>
+            <path class="grid" d="M354 222V290M446 222V290M538 222V290M630 222V290M722 222V290M814 222V290M906 222V290M998 222V290"/>
+            <rect class="frame-on" x="354" y="232" width="76" height="44" rx="4"/>
+            <rect class="frame-on" x="446" y="232" width="76" height="44" rx="4"/>
+            <rect class="frame-hold" x="538" y="232" width="76" height="44" rx="4"/>
+            <rect class="frame-hold" x="630" y="232" width="76" height="44" rx="4"/>
+            <rect class="frame-on" x="722" y="232" width="76" height="44" rx="4"/>
+            <rect class="frame-on" x="814" y="232" width="76" height="44" rx="4"/>
+            <rect class="frame-hold" x="906" y="232" width="76" height="44" rx="4"/>
+            <rect class="frame-on" x="998" y="232" width="76" height="44" rx="4"/>
+            <text class="t-num" x="392" y="259" text-anchor="middle">1</text>
+            <text class="t-num" x="484" y="259" text-anchor="middle">2</text>
+            <text class="t-num t-hold" x="576" y="259" text-anchor="middle">2</text>
+            <text class="t-num t-hold" x="668" y="259" text-anchor="middle">2</text>
+            <text class="t-num" x="760" y="259" text-anchor="middle">5</text>
+            <text class="t-num" x="852" y="259" text-anchor="middle">6</text>
+            <text class="t-num t-hold" x="944" y="259" text-anchor="middle">6</text>
+            <text class="t-num" x="1036" y="259" text-anchor="middle">7</text>
+            <text class="t-sm t-hold" x="622" y="296" text-anchor="middle">最後の画 + 無音</text>
+            <text class="t-sm t-hold" x="944" y="296" text-anchor="middle">最後の画 + 無音</text>
 
             <path class="rule" d="M170 314H1108" marker-end="url(#ah-m)"/>
             <text class="t-label" x="0" y="318">TIME</text>
           </svg>
-          <svg class="d v-narrow" viewBox="0 0 340 586" role="img" aria-labelledby="f3n-t f3n-d">
+          <svg class="d v-narrow" viewBox="0 0 340 566" role="img" aria-labelledby="f3n-t f3n-d">
             <title id="f3n-t">処理の遅れと入力の途切れがあっても、出力は周期ごとに続く</title>
-            <desc id="f3n-d">時間は上から下へ進む。入力の frame 1 から 7 が周期ごとに届き、少し間を空けて 8 が届く。thread P が 3 の処理に時間を掛けた間に、pre buffer は 4 を捨てる。出力は周期ごとに 1、2、2、3、5、6、7、7、8 を送り、送る frame が無い周期では最後の画を無音で繰り返す。</desc>
+            <desc id="f3n-d">時間は上から下へ進む。入力の frame 1 から 6 が周期ごとに届き、一周期の途切れの後に 7 が届く。出力は各 frame を、受け取ってから二周期の後の枠で送る。thread P が 3 の処理に時間を掛けた間に、pre buffer は 4 を捨てる。3 は自分の枠の時刻に間に合わず、送らずに捨てる。出力は周期ごとに 1、2、2、2、5、6、6、7 を送り、送る frame が無い周期では最後の画を無音で繰り返す。</desc>
             <text class="t-label" x="0" y="24">TIME ↓</text>
             <text class="t-sm t-strong" x="105" y="24" text-anchor="middle">入力</text>
             <text class="t-sm t-strong" x="195" y="24" text-anchor="middle">thread P</text>
@@ -676,63 +657,58 @@
             <rect class="frame-drop" x="73" y="204" width="64" height="40" rx="4"/>
             <rect class="frame" x="73" y="256" width="64" height="40" rx="4"/>
             <rect class="frame" x="73" y="308" width="64" height="40" rx="4"/>
-            <rect class="frame" x="73" y="360" width="64" height="40" rx="4"/>
-            <rect class="frame" x="73" y="503" width="64" height="40" rx="4"/>
+            <rect class="frame" x="73" y="412" width="64" height="40" rx="4"/>
             <text class="t-num" x="105" y="73" text-anchor="middle">1</text>
             <text class="t-num" x="105" y="125" text-anchor="middle">2</text>
             <text class="t-num" x="105" y="177" text-anchor="middle">3</text>
             <text class="t-num t-drop" x="105" y="229" text-anchor="middle">4</text>
             <text class="t-num" x="105" y="281" text-anchor="middle">5</text>
             <text class="t-num" x="105" y="333" text-anchor="middle">6</text>
-            <text class="t-num" x="105" y="385" text-anchor="middle">7</text>
-            <text class="t-num" x="105" y="528" text-anchor="middle">8</text>
+            <text class="t-num" x="105" y="437" text-anchor="middle">7</text>
             <text class="t-sm t-drop" x="64" y="229" text-anchor="end">捨てる</text>
-            <path class="rule" d="M68 412H62V494H68"/>
-            <text class="t-sm t-muted" x="56" y="450" text-anchor="end">入力が</text>
-            <text class="t-sm t-muted" x="56" y="468" text-anchor="end">途切れる</text>
+            <path class="rule" d="M68 356H62V404H68"/>
+            <text class="t-sm t-muted" x="56" y="376" text-anchor="end">入力が</text>
+            <text class="t-sm t-muted" x="56" y="394" text-anchor="end">途切れる</text>
 
             <rect class="frame-on" x="163" y="54" width="64" height="32" rx="4"/>
             <rect class="frame-on" x="163" y="106" width="64" height="32" rx="4"/>
-            <rect class="frame-on" x="163" y="158" width="64" height="104" rx="4"/>
+            <rect class="frame-drop" x="163" y="158" width="64" height="104" rx="4"/>
             <rect class="frame-on" x="163" y="272" width="64" height="32" rx="4"/>
             <rect class="frame-on" x="163" y="314" width="64" height="32" rx="4"/>
-            <rect class="frame-on" x="163" y="366" width="64" height="32" rx="4"/>
-            <rect class="frame-on" x="163" y="506" width="64" height="24" rx="4"/>
+            <rect class="frame-on" x="163" y="418" width="64" height="24" rx="4"/>
             <text class="t-num" x="195" y="75" text-anchor="middle">1</text>
             <text class="t-num" x="195" y="127" text-anchor="middle">2</text>
-            <text class="t-num" x="195" y="204" text-anchor="middle">3</text>
-            <text class="t-sm t-muted" x="195" y="226" text-anchor="middle">遅れる</text>
+            <text class="t-num t-drop" x="195" y="200" text-anchor="middle">3</text>
+            <text class="t-sm t-muted" x="195" y="224" text-anchor="middle">遅れる</text>
+            <text class="t-sm t-drop" x="195" y="244" text-anchor="middle">捨てる</text>
             <text class="t-num" x="195" y="293" text-anchor="middle">5</text>
             <text class="t-num" x="195" y="335" text-anchor="middle">6</text>
-            <text class="t-num" x="195" y="387" text-anchor="middle">7</text>
-            <text class="t-num" x="195" y="523" text-anchor="middle">8</text>
+            <text class="t-num" x="195" y="435" text-anchor="middle">7</text>
 
-            <rect class="frame-on" x="253" y="121" width="64" height="40" rx="4"/>
-            <rect class="frame-on" x="253" y="173" width="64" height="40" rx="4"/>
-            <rect class="frame-hold" x="253" y="225" width="64" height="40" rx="4"/>
-            <rect class="frame-on" x="253" y="277" width="64" height="40" rx="4"/>
-            <rect class="frame-on" x="253" y="329" width="64" height="40" rx="4"/>
-            <rect class="frame-on" x="253" y="381" width="64" height="40" rx="4"/>
-            <rect class="frame-on" x="253" y="433" width="64" height="40" rx="4"/>
-            <rect class="frame-hold" x="253" y="485" width="64" height="40" rx="4"/>
-            <rect class="frame-on" x="253" y="537" width="64" height="40" rx="4"/>
-            <text class="t-num" x="285" y="146" text-anchor="middle">1</text>
-            <text class="t-num" x="285" y="198" text-anchor="middle">2</text>
-            <text class="t-num t-hold" x="285" y="250" text-anchor="middle">2</text>
-            <text class="t-num" x="285" y="302" text-anchor="middle">3</text>
-            <text class="t-num" x="285" y="354" text-anchor="middle">5</text>
-            <text class="t-num" x="285" y="406" text-anchor="middle">6</text>
-            <text class="t-num" x="285" y="458" text-anchor="middle">7</text>
-            <text class="t-num t-hold" x="285" y="510" text-anchor="middle">7</text>
-            <text class="t-num" x="285" y="562" text-anchor="middle">8</text>
-            <path class="tick" d="M323 121H333M323 173H333M323 225H333M323 277H333M323 329H333M323 381H333M323 433H333M323 485H333M323 537H333"/>
+            <rect class="frame-on" x="253" y="152" width="64" height="40" rx="4"/>
+            <rect class="frame-on" x="253" y="204" width="64" height="40" rx="4"/>
+            <rect class="frame-hold" x="253" y="256" width="64" height="40" rx="4"/>
+            <rect class="frame-hold" x="253" y="308" width="64" height="40" rx="4"/>
+            <rect class="frame-on" x="253" y="360" width="64" height="40" rx="4"/>
+            <rect class="frame-on" x="253" y="412" width="64" height="40" rx="4"/>
+            <rect class="frame-hold" x="253" y="464" width="64" height="40" rx="4"/>
+            <rect class="frame-on" x="253" y="516" width="64" height="40" rx="4"/>
+            <text class="t-num" x="285" y="177" text-anchor="middle">1</text>
+            <text class="t-num" x="285" y="229" text-anchor="middle">2</text>
+            <text class="t-num t-hold" x="285" y="281" text-anchor="middle">2</text>
+            <text class="t-num t-hold" x="285" y="333" text-anchor="middle">2</text>
+            <text class="t-num" x="285" y="385" text-anchor="middle">5</text>
+            <text class="t-num" x="285" y="437" text-anchor="middle">6</text>
+            <text class="t-num t-hold" x="285" y="489" text-anchor="middle">6</text>
+            <text class="t-num" x="285" y="541" text-anchor="middle">7</text>
+            <path class="tick" d="M323 152H333M323 204H333M323 256H333M323 308H333M323 360H333M323 412H333M323 464H333M323 516H333"/>
           </svg>
           <div class="legend" aria-hidden="true">
             <span><i class="on"></i>処理して送った frame</span>
             <span><i class="drop"></i>捨てた frame</span>
             <span><i class="hold"></i>繰り返した最後の画 (音声は無音)</span>
           </div>
-          <figcaption><span class="fig-no" lang="en">Fig. 3</span><span>処理が遅れた間に 4 を捨て、送る frame が無い周期には最後の画を繰り返す例。出力は一周期も飛ばさずに続きます。図は動作を示す模式図です。</span></figcaption>
+          <figcaption><span class="fig-no" lang="en">Fig. 3</span><span>入力 module が各 frame を受け取ってから二周期の後の枠で、出力が送る例。処理が遅れた間に pre buffer が 4 を捨て、自分の枠の時刻に間に合わなかった 3 も送らずに捨てます。送る frame が無い周期には最後の画を繰り返し、出力は一周期も飛ばさずに続きます。図は動作を示す模式図です。</span></figcaption>
         </figure>
 
         <ul class="points">
@@ -751,55 +727,144 @@
           <h2 id="timing-title" lang="en">Keep the beat.<br>Follow the source.</h2>
           <p class="lead" style="margin-top:24px">出力の frame rate は入力と同じで、streamflow は frame rate を変換しません。thread S は出力の側の clock で一周期に一枚ずつ送り、届く間隔の揺れを出力へ持ち込みません。</p>
           <ul class="points">
-            <li><h3>入力の到着に緩やかに追従する</h3><p>送り手の clock と出力の clock は、わずかに違います。NDI と LMS の出力では、post buffer の待ちが目標に近づくよう、送信の時刻を一周期ごとにごく小さな量だけ前後させます。この追従は既定で有効です。</p><p class="small">目標の待ち (既定 4 ms) と、一周期あたりに動かす量の上限 (既定 0.1 ms) は、設定で変えられます。</p></li>
+            <li><h3>受け取った時刻から一定の遅延で送る</h3><p>NDI と LMS の出力では、出口が各画を、その画を入力 module が受け取った時刻から <span class="nw">D = N × 一周期</span> の後に選んで送ります。N は遅延の枚数で、<code>--output-delay-frames</code> で選べます。書かなかった時は 2 です。post buffer の容量 M は <code>--post-buffer-capacity-frames</code> で N 以上に設定でき、省略時は N と同じ枚数です。M − N 枚は早く届いた画を保つ余裕です。D は走行の間変わらず、処理の時間を見て伸び縮みしません。処理が D の内に間に合っている間は、画を捨てず、前の画も繰り返しません。</p><p class="small">各画を送る時刻は、入力の通し番号ごとに一周期ずつ並べた格子で決まるので、届く間隔の揺れは送る間隔に入りません。格子は送り手と出力の clock のわずかなずれだけを緩やかに追い、処理の遅れは追いません。受け取る時刻が段差で変わった時は、格子を置き直し、数周期の内に受け取った時刻から D の後に送る予定へ戻ります。自分の時刻に間に合わなかった画は音声と一緒に捨て、その周期には最後の画と無音を送ります。D は出口が画を選ぶ時刻までで、その後の encode と送信の時間を含みません。</p></li>
             <li><h3>周期が変わったら開き直す</h3><p>出力は、最初の frame が届いてから、その frame の周期で開きます。走行の途中で入力の frame 周期が変わった時は、受け付けた frame を送り終えてから出力を開き直します。開き直す間だけ、出力は途切れます。</p></li>
-            <li><h3>LMS の受信の待ちを選ぶ</h3><p>LMS の入力では、LMS の SDK が受信の側で待つ時間 (<code>delay_ms</code>) を、引数か設定 file で選べます。書かなかった時は 100 ms です。</p></li>
-            <li><h3>処理の境目の時刻を記録する</h3><p><code>--stage-trace &lt;path&gt;</code> を付けて起動すると、入力、thread P、出力の処理の境目の時刻を記録し、終了時に一つの file に書き出します。遅延がどの段で生じるかを調べる時に使います。</p><p class="small">記録は起動時に確保した配列に入れ、系列ごとに直近の n frame 分 (既定 9000、<code>--stage-trace-records</code> で変更) を残し、古い記録から上書きします。運転中に配列は増えません。付けずに起動した時は記録しません。</p></li>
+            <li><h3>LMS の受信の待ちを選ぶ</h3><p>LMS の入力では、LMS の SDK が受信の側で待つ時間 (<code>receive_delay_ms</code>) を、引数か設定 file で選べます。書かなかった時は 120 ms です。</p></li>
+            <li><h3>処理の境目の時刻を記録する</h3><p><code>--stage-trace-path &lt;path&gt;</code> を付けて起動すると、入力、thread P、出力の処理の境目の時刻を記録し、終了時に一つの file に書き出します。遅延がどの段で生じるかを調べる時に使います。</p><p class="small">記録は起動時に確保した配列に入れ、系列ごとに直近の n frame 分 (既定 9000、<code>--stage-trace-capacity</code> で変更) を残し、古い記録から上書きします。運転中に配列は増えません。付けずに起動した時は記録しません。</p></li>
           </ul>
         </div>
         <figure class="fig">
-          <svg class="d v-wide" viewBox="0 0 560 282" role="img" aria-labelledby="f4w-t f4w-d">
-            <title id="f4w-t">送信の時刻を追従させた時と、させない時の post buffer の待ち</title>
-            <desc id="f4w-d">横軸は時間、縦軸は post buffer の待ち。追従させない線は少しずつ下がり、待ちが無くなるたびに最後の画を繰り返して上へ戻る。追従させる線は目標の待ちの近くに留まる。上の帯は満杯で frame を捨てる領域、下の帯は空で最後の画を繰り返す領域。</desc>
-            <text class="t-sm t-muted" x="56" y="24">post buffer の待ち</text>
-            <rect class="band-drop" x="56" y="40" width="484" height="28"/>
-            <text class="t-sm t-drop" x="68" y="59">満杯 → frame を捨てる</text>
-            <rect class="band-hold" x="56" y="212" width="484" height="38"/>
-            <text class="t-sm t-hold" x="68" y="243">空 → 最後の画を繰り返す</text>
-            <path class="target" d="M56 140H540"/>
-            <text class="t-sm t-accent" x="536" y="130" text-anchor="end">目標の待ち</text>
-            <path class="line-free" d="M56 140L200 218V140L344 218V140L488 218V140L540 168"/>
-            <circle class="dot-hold" cx="200" cy="218" r="5"/>
-            <circle class="dot-hold" cx="344" cy="218" r="5"/>
-            <circle class="dot-hold" cx="488" cy="218" r="5"/>
-            <path class="line-follow" d="M56 140C96 150 136 151 176 146S256 136 296 141S376 150 416 146S496 136 540 140"/>
-            <path class="rule" d="M56 40V250H540"/>
-            <text class="t-sm t-muted" x="540" y="272" text-anchor="end">時間</text>
+          <svg class="d v-wide" viewBox="0 0 560 214" role="img" aria-labelledby="f4w-t f4w-d">
+            <title id="f4w-t">届く間隔が揺れても、各画を受け取った時刻から D の後の格子の時刻に送る</title>
+            <desc id="f4w-d">時間は左から右へ進む。一行目は入力の受取で、画 1 から 6 が揺れた間隔で届く。二行目は thread P の処理で、thread P は画を順に処理して post buffer へ入れる。三行目は出力で、出口は各画を、受け取った時刻から D = N × 一周期 (N = 2) の後の格子の時刻に選んで送り、送る間隔は等しい。D の内に処理を終えた画は、捨てず、前の画も繰り返さない。4 は処理が自分の時刻に間に合わず、捨てる。その周期には最後の画 3 を無音で繰り返す。</desc>
+            <text class="t-md t-strong" x="0" y="22">入力の受取</text>
+            <text class="t-sm t-muted" x="0" y="40">間隔が揺れる</text>
+            <text class="t-md t-strong" x="0" y="86">thread P</text>
+            <text class="t-sm t-muted" x="0" y="104">超解像と resize</text>
+            <text class="t-md t-strong" x="0" y="154">出力</text>
+            <text class="t-sm t-muted" x="0" y="172">一周期に一枚</text>
+
+            <rect class="frame" x="108" y="8" width="32" height="32" rx="4"/>
+            <rect class="frame" x="180" y="8" width="32" height="32" rx="4"/>
+            <rect class="frame" x="218" y="8" width="32" height="32" rx="4"/>
+            <rect class="frame" x="298" y="8" width="32" height="32" rx="4"/>
+            <rect class="frame" x="336" y="8" width="32" height="32" rx="4"/>
+            <rect class="frame" x="408" y="8" width="32" height="32" rx="4"/>
+            <text class="t-num" x="124" y="29" text-anchor="middle">1</text>
+            <text class="t-num" x="196" y="29" text-anchor="middle">2</text>
+            <text class="t-num" x="234" y="29" text-anchor="middle">3</text>
+            <text class="t-num" x="314" y="29" text-anchor="middle">4</text>
+            <text class="t-num" x="352" y="29" text-anchor="middle">5</text>
+            <text class="t-num" x="424" y="29" text-anchor="middle">6</text>
+
+            <path class="grid" d="M108 40V158"/>
+            <rect class="frame-on" x="108" y="72" width="64" height="32" rx="4"/>
+            <rect class="frame-on" x="180" y="72" width="58" height="32" rx="4"/>
+            <rect class="frame-on" x="241" y="72" width="61" height="32" rx="4"/>
+            <rect class="frame-drop" x="305" y="72" width="103" height="32" rx="4"/>
+            <rect class="frame-on" x="411" y="72" width="37" height="32" rx="4"/>
+            <rect class="frame-on" x="451" y="72" width="43" height="32" rx="4"/>
+            <text class="t-num" x="140" y="93" text-anchor="middle">1</text>
+            <text class="t-num" x="209" y="93" text-anchor="middle">2</text>
+            <text class="t-num" x="271.5" y="93" text-anchor="middle">3</text>
+            <text class="t-num t-drop" x="356.5" y="93" text-anchor="middle">4</text>
+            <text class="t-num" x="429.5" y="93" text-anchor="middle">5</text>
+            <text class="t-num" x="472.5" y="93" text-anchor="middle">6</text>
+
+            <path class="rule" d="M172 104L232 140" marker-end="url(#ah-m)"/>
+            <path class="rule" d="M238 104L290 140" marker-end="url(#ah-m)"/>
+            <path class="rule" d="M302 104L348 140" marker-end="url(#ah-m)"/>
+            <path class="rule" d="M448 104L464 140" marker-end="url(#ah-m)"/>
+            <path class="rule" d="M494 104L522 140" marker-end="url(#ah-m)"/>
+            <text class="t-sm t-drop" x="356.5" y="126" text-anchor="middle">捨てる</text>
+
+            <text class="t-sm t-accent" x="166" y="151" text-anchor="middle">D = N × 一周期</text>
+            <path class="wire" d="M110 158H222" marker-start="url(#ah)" marker-end="url(#ah)"/>
+            <rect class="frame-on" x="224" y="140" width="34" height="32" rx="4"/>
+            <rect class="frame-on" x="282" y="140" width="34" height="32" rx="4"/>
+            <rect class="frame-on" x="340" y="140" width="34" height="32" rx="4"/>
+            <rect class="frame-hold" x="398" y="140" width="34" height="32" rx="4"/>
+            <rect class="frame-on" x="456" y="140" width="34" height="32" rx="4"/>
+            <rect class="frame-on" x="514" y="140" width="34" height="32" rx="4"/>
+            <text class="t-num" x="241" y="161" text-anchor="middle">1</text>
+            <text class="t-num" x="299" y="161" text-anchor="middle">2</text>
+            <text class="t-num" x="357" y="161" text-anchor="middle">3</text>
+            <text class="t-num t-hold" x="415" y="161" text-anchor="middle">3</text>
+            <text class="t-num" x="473" y="161" text-anchor="middle">5</text>
+            <text class="t-num" x="531" y="161" text-anchor="middle">6</text>
+            <path class="rule" d="M108 184H556" marker-end="url(#ah-m)"/>
+            <path class="tick" d="M224 178V190M282 178V190M340 178V190M398 178V190M456 178V190M514 178V190"/>
+            <text class="t-sm t-hold" x="415" y="206" text-anchor="middle">最後の画 + 無音</text>
+            <text class="t-sm t-muted" x="556" y="206" text-anchor="end">時間</text>
           </svg>
-          <svg class="d v-narrow" viewBox="0 0 340 246" role="img" aria-labelledby="f4n-t f4n-d">
-            <title id="f4n-t">送信の時刻を追従させた時と、させない時の post buffer の待ち</title>
-            <desc id="f4n-d">横軸は時間、縦軸は post buffer の待ち。追従させない線は少しずつ下がり、待ちが無くなるたびに最後の画を繰り返して上へ戻る。追従させる線は目標の待ちの近くに留まる。上の帯は満杯で frame を捨てる領域、下の帯は空で最後の画を繰り返す領域。</desc>
-            <text class="t-sm t-muted" x="8" y="20">post buffer の待ち</text>
-            <rect class="band-drop" x="8" y="32" width="324" height="26"/>
-            <text class="t-sm t-drop" x="18" y="50">満杯 → 捨てる</text>
-            <rect class="band-hold" x="8" y="182" width="324" height="34"/>
-            <text class="t-sm t-hold" x="18" y="209">空 → 繰り返す</text>
-            <path class="target" d="M8 122H332"/>
-            <text class="t-sm t-accent" x="328" y="112" text-anchor="end">目標</text>
-            <path class="line-free" d="M8 122L104 188V122L200 188V122L296 188V122L332 147"/>
-            <circle class="dot-hold" cx="104" cy="188" r="4.5"/>
-            <circle class="dot-hold" cx="200" cy="188" r="4.5"/>
-            <circle class="dot-hold" cx="296" cy="188" r="4.5"/>
-            <path class="line-follow" d="M8 122C34 130 60 131 86 127S138 117 164 122S216 131 242 127S300 118 332 122"/>
-            <path class="rule" d="M8 32V216H332"/>
-            <text class="t-sm t-muted" x="332" y="238" text-anchor="end">時間</text>
+          <svg class="d v-narrow" viewBox="0 0 340 212" role="img" aria-labelledby="f4n-t f4n-d">
+            <title id="f4n-t">届く間隔が揺れても、各画を受け取った時刻から D の後の格子の時刻に送る</title>
+            <desc id="f4n-d">時間は左から右へ進む。一行目は入力の受取で、画 1 から 6 が揺れた間隔で届く。二行目は thread P の処理で、thread P は画を順に処理して post buffer へ入れる。三行目は出力で、出口は各画を、受け取った時刻から D = N × 一周期 (N = 2) の後の格子の時刻に選んで送り、送る間隔は等しい。D の内に処理を終えた画は、捨てず、前の画も繰り返さない。4 は処理が自分の時刻に間に合わず、捨てる。その周期には最後の画 3 を無音で繰り返す。</desc>
+            <text class="t-label" x="0" y="14">IN</text>
+            <text class="t-sm t-muted" x="28" y="14">届く間隔は揺れる</text>
+            <rect class="frame" x="8" y="24" width="26" height="28" rx="4"/>
+            <rect class="frame" x="60" y="24" width="26" height="28" rx="4"/>
+            <rect class="frame" x="90" y="24" width="26" height="28" rx="4"/>
+            <rect class="frame" x="146" y="24" width="26" height="28" rx="4"/>
+            <rect class="frame" x="175" y="24" width="26" height="28" rx="4"/>
+            <rect class="frame" x="226" y="24" width="26" height="28" rx="4"/>
+            <text class="t-num" x="21" y="43" text-anchor="middle">1</text>
+            <text class="t-num" x="73" y="43" text-anchor="middle">2</text>
+            <text class="t-num" x="103" y="43" text-anchor="middle">3</text>
+            <text class="t-num" x="159" y="43" text-anchor="middle">4</text>
+            <text class="t-num" x="188" y="43" text-anchor="middle">5</text>
+            <text class="t-num" x="239" y="43" text-anchor="middle">6</text>
+
+            <text class="t-label" x="0" y="74">THREAD P</text>
+            <text class="t-sm t-muted" x="72" y="74">超解像と resize</text>
+            <rect class="frame-on" x="8" y="82" width="47" height="28" rx="4"/>
+            <rect class="frame-on" x="60" y="82" width="42" height="28" rx="4"/>
+            <rect class="frame-on" x="104" y="82" width="45" height="28" rx="4"/>
+            <rect class="frame-drop" x="151" y="82" width="74" height="28" rx="4"/>
+            <rect class="frame-on" x="227" y="82" width="27" height="28" rx="4"/>
+            <rect class="frame-on" x="256" y="82" width="32" height="28" rx="4"/>
+            <text class="t-num" x="31.5" y="101" text-anchor="middle">1</text>
+            <text class="t-num" x="81" y="101" text-anchor="middle">2</text>
+            <text class="t-num" x="126.5" y="101" text-anchor="middle">3</text>
+            <text class="t-num t-drop" x="188" y="101" text-anchor="middle">4</text>
+            <text class="t-num" x="240.5" y="101" text-anchor="middle">5</text>
+            <text class="t-num" x="272" y="101" text-anchor="middle">6</text>
+
+            <path class="rule" d="M55 110L98 140" marker-end="url(#ah-m)"/>
+            <path class="rule" d="M102 110L140 140" marker-end="url(#ah-m)"/>
+            <path class="rule" d="M149 110L182 140" marker-end="url(#ah-m)"/>
+            <path class="rule" d="M254 110L266 140" marker-end="url(#ah-m)"/>
+            <path class="rule" d="M288 110L308 140" marker-end="url(#ah-m)"/>
+            <text class="t-sm t-drop" x="188" y="128" text-anchor="middle">捨てる</text>
+
+            <text class="t-sm t-accent" x="50" y="151" text-anchor="middle">D</text>
+            <path class="wire" d="M10 158H90" marker-start="url(#ah)" marker-end="url(#ah)"/>
+            <rect class="frame-on" x="92" y="140" width="28" height="28" rx="4"/>
+            <rect class="frame-on" x="134" y="140" width="28" height="28" rx="4"/>
+            <rect class="frame-on" x="176" y="140" width="28" height="28" rx="4"/>
+            <rect class="frame-hold" x="218" y="140" width="28" height="28" rx="4"/>
+            <rect class="frame-on" x="260" y="140" width="28" height="28" rx="4"/>
+            <rect class="frame-on" x="302" y="140" width="28" height="28" rx="4"/>
+            <text class="t-num" x="106" y="159" text-anchor="middle">1</text>
+            <text class="t-num" x="148" y="159" text-anchor="middle">2</text>
+            <text class="t-num" x="190" y="159" text-anchor="middle">3</text>
+            <text class="t-num t-hold" x="232" y="159" text-anchor="middle">3</text>
+            <text class="t-num" x="274" y="159" text-anchor="middle">5</text>
+            <text class="t-num" x="316" y="159" text-anchor="middle">6</text>
+            <path class="rule" d="M8 180H336" marker-end="url(#ah-m)"/>
+            <path class="tick" d="M92 174V186M134 174V186M176 174V186M218 174V186M260 174V186M302 174V186"/>
+            <text class="t-label" x="0" y="202">OUT</text>
+            <text class="t-sm t-muted" x="32" y="202">一周期に一枚</text>
+            <text class="t-sm t-hold" x="232" y="202" text-anchor="middle">最後の画 + 無音</text>
+            <text class="t-sm t-muted" x="340" y="202" text-anchor="end">時間</text>
           </svg>
           <div class="legend" aria-hidden="true">
-            <span><i class="line"></i>追従あり (既定)</span>
-            <span><i class="line-free"></i>追従なし</span>
-            <span><i class="dot"></i>最後の画を繰り返した時点</span>
+            <span><i></i>受け取った画</span>
+            <span><i class="on"></i>処理して送った画</span>
+            <span><i class="drop"></i>間に合わずに捨てた画</span>
+            <span><i class="hold"></i>繰り返した最後の画 (音声は無音)</span>
           </div>
-          <figcaption><span class="fig-no" lang="en">Fig. 4</span><span>送り手の clock が出力の clock よりわずかに遅い時の post buffer の待ち。追従しないと待ちが少しずつ減り、空になるたびに最後の画を繰り返します。送り手が速い時は、逆に満杯になって frame を捨てます。追従すると、待ちは目標の近くに留まります。図は模式図です。</span></figcaption>
+          <figcaption><span class="fig-no" lang="en">Fig. 4</span><span>N = 2 の例。届く間隔が揺れても、出口は各画を、受け取った時刻から D = N × 一周期 の後の格子の時刻に、等しい間隔で送ります。D の内に処理を終えた画は捨てず、前の画も繰り返しません。処理が自分の時刻に間に合わなかった 4 だけを音声と一緒に捨て、その周期には最後の画 3 を繰り返します。図は模式図です。</span></figcaption>
         </figure>
       </div>
     </section>
@@ -817,7 +882,7 @@
         <figure class="fig">
           <svg class="d v-wide" viewBox="0 0 1120 324" role="img" aria-labelledby="f5w-t f5w-d">
             <title id="f5w-t">frame と一緒に運ぶ音声と timecode</title>
-            <desc id="f5w-d">入力の frame 1 から 5 は、それぞれ timecode と音声を持つ。3 を捨てる時は、その音声も一緒に捨てる。出力は 1、2、4、5 を送り、最後に 5 を繰り返す。繰り返した周期は同じ timecode を付け、音声は無音にする。出力の音声の sample 数は 1602、1601、1602、1601、1602 と配る。</desc>
+            <desc id="f5w-d">入力の frame 1 から 5 は、それぞれ timecode と音声を持つ。3 を捨てる時は、その音声も一緒に捨てる。出力は 1、2 を送り、3 の周期には最後の画 2 を繰り返し、その後 4、5 をそれぞれの周期に送る。繰り返した周期は 2 と同じ timecode を付け、音声は無音にする。出力の音声の sample 数は 1602、1601、1602、1601、1602 と配る。</desc>
             <text class="t-sm t-drop" x="600" y="22" text-anchor="middle">画と音声を一緒に捨てる</text>
             <text class="t-md t-strong" x="0" y="88">入力</text>
             <text class="t-sm t-muted" x="0" y="108">timecode · 画 · 音声</text>
@@ -850,43 +915,43 @@
             <path class="wave" d="M730 128q5 -7 10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0"/>
             <path class="wave" d="M910 128q5 -7 10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0"/>
 
-            <path class="rule" d="M240 144V178" marker-end="url(#ah-m)"/><path class="rule" d="M420 144V178" marker-end="url(#ah-m)"/><path class="rule" d="M780 144L604 178" marker-end="url(#ah-m)"/><path class="rule" d="M960 144L784 178" marker-end="url(#ah-m)"/>
+            <path class="rule" d="M240 144V178" marker-end="url(#ah-m)"/><path class="rule" d="M420 144V178" marker-end="url(#ah-m)"/><path class="rule" d="M780 144V178" marker-end="url(#ah-m)"/><path class="rule" d="M960 144V178" marker-end="url(#ah-m)"/>
 
             <text class="t-sm t-mono t-muted" x="240" y="198" text-anchor="middle">10:00:00:01</text>
             <text class="t-sm t-mono t-muted" x="420" y="198" text-anchor="middle">10:00:00:02</text>
-            <text class="t-sm t-mono t-muted" x="600" y="198" text-anchor="middle">10:00:00:04</text>
-            <text class="t-sm t-mono t-muted" x="780" y="198" text-anchor="middle">10:00:00:05</text>
-            <text class="t-sm t-mono t-hold" x="960" y="198" text-anchor="middle">10:00:00:05</text>
+            <text class="t-sm t-mono t-hold" x="600" y="198" text-anchor="middle">10:00:00:02</text>
+            <text class="t-sm t-mono t-muted" x="780" y="198" text-anchor="middle">10:00:00:04</text>
+            <text class="t-sm t-mono t-muted" x="960" y="198" text-anchor="middle">10:00:00:05</text>
             <rect class="frame-on" x="180" y="208" width="120" height="56" rx="4"/>
             <rect class="frame-on" x="360" y="208" width="120" height="56" rx="4"/>
-            <rect class="frame-on" x="540" y="208" width="120" height="56" rx="4"/>
+            <rect class="frame-hold" x="540" y="208" width="120" height="56" rx="4"/>
             <rect class="frame-on" x="720" y="208" width="120" height="56" rx="4"/>
-            <rect class="frame-hold" x="900" y="208" width="120" height="56" rx="4"/>
+            <rect class="frame-on" x="900" y="208" width="120" height="56" rx="4"/>
             <text class="t-num" x="240" y="241" text-anchor="middle">1</text>
             <text class="t-num" x="420" y="241" text-anchor="middle">2</text>
-            <text class="t-num" x="600" y="241" text-anchor="middle">4</text>
-            <text class="t-num" x="780" y="241" text-anchor="middle">5</text>
-            <text class="t-num t-hold" x="960" y="241" text-anchor="middle">5</text>
+            <text class="t-num t-hold" x="600" y="241" text-anchor="middle">2</text>
+            <text class="t-num" x="780" y="241" text-anchor="middle">4</text>
+            <text class="t-num" x="960" y="241" text-anchor="middle">5</text>
             <rect class="aud" x="180" y="270" width="120" height="20" rx="3"/>
             <rect class="aud" x="360" y="270" width="120" height="20" rx="3"/>
-            <rect class="aud" x="540" y="270" width="120" height="20" rx="3"/>
+            <rect class="aud-silent" x="540" y="270" width="120" height="20" rx="3"/>
             <rect class="aud" x="720" y="270" width="120" height="20" rx="3"/>
-            <rect class="aud-silent" x="900" y="270" width="120" height="20" rx="3"/>
+            <rect class="aud" x="900" y="270" width="120" height="20" rx="3"/>
             <path class="wave" d="M190 280q5 -7 10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0"/>
             <path class="wave" d="M370 280q5 -7 10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0"/>
-            <path class="wave" d="M550 280q5 -7 10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0"/>
+            <path class="wave-silent" d="M550 280H650"/>
             <path class="wave" d="M730 280q5 -7 10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0"/>
-            <path class="wave-silent" d="M910 280H1010"/>
+            <path class="wave" d="M910 280q5 -7 10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0t10 0"/>
             <text class="t-sm t-mono t-muted" x="240" y="312" text-anchor="middle">1602</text>
             <text class="t-sm t-mono t-muted" x="420" y="312" text-anchor="middle">1601</text>
-            <text class="t-sm t-mono t-muted" x="600" y="312" text-anchor="middle">1602</text>
+            <text class="t-sm t-mono t-hold" x="600" y="312" text-anchor="middle">1602 · 無音</text>
             <text class="t-sm t-mono t-muted" x="780" y="312" text-anchor="middle">1601</text>
-            <text class="t-sm t-mono t-hold" x="960" y="312" text-anchor="middle">1602 · 無音</text>
+            <text class="t-sm t-mono t-muted" x="960" y="312" text-anchor="middle">1602</text>
             <text class="t-label" x="1120" y="312" text-anchor="end">SAMPLES</text>
           </svg>
           <svg class="d v-narrow" viewBox="0 0 340 322" role="img" aria-labelledby="f5n-t f5n-d">
             <title id="f5n-t">frame と一緒に運ぶ音声と timecode</title>
-            <desc id="f5n-d">入力の frame 1 から 5 は、それぞれ timecode と音声を持つ。3 を捨てる時は、その音声も一緒に捨てる。出力は 1、2、4、5 を送り、最後に 5 を繰り返す。繰り返した周期は同じ timecode を付け、音声は無音にする。出力の音声の sample 数は 1602、1601、1602、1601、1602 と配る。</desc>
+            <desc id="f5n-d">入力の frame 1 から 5 は、それぞれ timecode と音声を持つ。3 を捨てる時は、その音声も一緒に捨てる。出力は 1、2 を送り、3 の周期には最後の画 2 を繰り返し、その後 4、5 をそれぞれの周期に送る。繰り返した周期は 2 と同じ timecode を付け、音声は無音にする。出力の音声の sample 数は 1602、1601、1602、1601、1602 と配る。</desc>
             <text class="t-label" x="0" y="40">IN</text>
             <text class="t-sm t-drop" x="340" y="40" text-anchor="end">画と音声を一緒に捨てる</text>
             <text class="t-sm t-mono t-muted" x="28" y="62" text-anchor="middle">:01</text>
@@ -915,51 +980,51 @@
             <path class="wave" d="M219 124q4 -5 8 0t8 0t8 0t8 0t8 0t8 0"/>
             <path class="wave" d="M290 124q4 -5 8 0t8 0t8 0t8 0t8 0t8 0"/>
 
-            <path class="rule" d="M28 138V172" marker-end="url(#ah-m)"/><path class="rule" d="M99 138V172" marker-end="url(#ah-m)"/><path class="rule" d="M241 138L173 172" marker-end="url(#ah-m)"/><path class="rule" d="M312 138L244 172" marker-end="url(#ah-m)"/>
+            <path class="rule" d="M28 138V172" marker-end="url(#ah-m)"/><path class="rule" d="M99 138V172" marker-end="url(#ah-m)"/><path class="rule" d="M241 138V172" marker-end="url(#ah-m)"/><path class="rule" d="M312 138V172" marker-end="url(#ah-m)"/>
 
             <text class="t-label" x="0" y="190">OUT</text>
             <text class="t-sm t-mono t-muted" x="28" y="210" text-anchor="middle">:01</text>
             <text class="t-sm t-mono t-muted" x="99" y="210" text-anchor="middle">:02</text>
-            <text class="t-sm t-mono t-muted" x="170" y="210" text-anchor="middle">:04</text>
-            <text class="t-sm t-mono t-muted" x="241" y="210" text-anchor="middle">:05</text>
-            <text class="t-sm t-mono t-hold" x="312" y="210" text-anchor="middle">:05</text>
+            <text class="t-sm t-mono t-hold" x="170" y="210" text-anchor="middle">:02</text>
+            <text class="t-sm t-mono t-muted" x="241" y="210" text-anchor="middle">:04</text>
+            <text class="t-sm t-mono t-muted" x="312" y="210" text-anchor="middle">:05</text>
             <rect class="frame-on" x="0" y="218" width="56" height="40" rx="4"/>
             <rect class="frame-on" x="71" y="218" width="56" height="40" rx="4"/>
-            <rect class="frame-on" x="142" y="218" width="56" height="40" rx="4"/>
+            <rect class="frame-hold" x="142" y="218" width="56" height="40" rx="4"/>
             <rect class="frame-on" x="213" y="218" width="56" height="40" rx="4"/>
-            <rect class="frame-hold" x="284" y="218" width="56" height="40" rx="4"/>
+            <rect class="frame-on" x="284" y="218" width="56" height="40" rx="4"/>
             <text class="t-num" x="28" y="243" text-anchor="middle">1</text>
             <text class="t-num" x="99" y="243" text-anchor="middle">2</text>
-            <text class="t-num" x="170" y="243" text-anchor="middle">4</text>
-            <text class="t-num" x="241" y="243" text-anchor="middle">5</text>
-            <text class="t-num t-hold" x="312" y="243" text-anchor="middle">5</text>
+            <text class="t-num t-hold" x="170" y="243" text-anchor="middle">2</text>
+            <text class="t-num" x="241" y="243" text-anchor="middle">4</text>
+            <text class="t-num" x="312" y="243" text-anchor="middle">5</text>
             <rect class="aud" x="0" y="264" width="56" height="16" rx="3"/>
             <rect class="aud" x="71" y="264" width="56" height="16" rx="3"/>
-            <rect class="aud" x="142" y="264" width="56" height="16" rx="3"/>
+            <rect class="aud-silent" x="142" y="264" width="56" height="16" rx="3"/>
             <rect class="aud" x="213" y="264" width="56" height="16" rx="3"/>
-            <rect class="aud-silent" x="284" y="264" width="56" height="16" rx="3"/>
+            <rect class="aud" x="284" y="264" width="56" height="16" rx="3"/>
             <path class="wave" d="M6 272q4 -5 8 0t8 0t8 0t8 0t8 0t8 0"/>
             <path class="wave" d="M77 272q4 -5 8 0t8 0t8 0t8 0t8 0t8 0"/>
-            <path class="wave" d="M148 272q4 -5 8 0t8 0t8 0t8 0t8 0t8 0"/>
+            <path class="wave-silent" d="M148 272H192"/>
             <path class="wave" d="M219 272q4 -5 8 0t8 0t8 0t8 0t8 0t8 0"/>
-            <path class="wave-silent" d="M290 272H334"/>
+            <path class="wave" d="M290 272q4 -5 8 0t8 0t8 0t8 0t8 0t8 0"/>
             <text class="t-sm t-mono t-muted" x="28" y="298" text-anchor="middle">1602</text>
             <text class="t-sm t-mono t-muted" x="99" y="298" text-anchor="middle">1601</text>
-            <text class="t-sm t-mono t-muted" x="170" y="298" text-anchor="middle">1602</text>
+            <text class="t-sm t-mono t-hold" x="170" y="298" text-anchor="middle">1602</text>
             <text class="t-sm t-mono t-muted" x="241" y="298" text-anchor="middle">1601</text>
-            <text class="t-sm t-mono t-hold" x="312" y="298" text-anchor="middle">1602</text>
-            <text class="t-sm t-hold" x="312" y="316" text-anchor="middle">無音</text>
+            <text class="t-sm t-mono t-muted" x="312" y="298" text-anchor="middle">1602</text>
+            <text class="t-sm t-hold" x="170" y="316" text-anchor="middle">無音</text>
           </svg>
           <div class="legend" aria-hidden="true">
             <span><i class="on"></i>画と音声</span>
             <span><i class="drop"></i>捨てた frame と音声</span>
             <span><i class="hold"></i>繰り返した画と無音</span>
           </div>
-          <figcaption><span class="fig-no" lang="en">Fig. 5</span><span>3 を捨て、5 を繰り返した例。出力の音声の sample 数は、起点から数えた累積で決めます。一周期の sample 数が整数にならない時 (例: 1601.6) は、1602 と 1601 を配って端数を合わせます。</span></figcaption>
+          <figcaption><span class="fig-no" lang="en">Fig. 5</span><span>3 を捨て、その周期に最後の画 2 を繰り返した例。4 と 5 は、それぞれ自分の周期に送ります。出力の音声の sample 数は、起点から数えた累積で決めます。一周期の sample 数が整数にならない時 (例: 1601.6) は、1602 と 1601 を配って端数を合わせます。</span></figcaption>
         </figure>
 
         <ul class="points">
-          <li><h3>音声は選んで有効にする</h3><p>音声の出力は、<code>--audio</code> か、設定 file の <code>output.audio.enabled</code> で有効にします。既定では無効です。</p></li>
+          <li><h3>音声は選んで有効にする</h3><p>音声の出力は、<code>--output-audio-enabled</code> か、設定 file の <code>output.audio.enabled</code> で有効にします。既定では無効です。</p></li>
           <li><h3>timecode を引き継ぐ</h3><p>NDI へ出力する時は、出力の各 frame に、その画の元になった入力の frame の timecode を付けます。同じ画を繰り返す時は同じ値を付け、捨てた frame の値は出力に現れません。入力に timecode が無い時は、送る時の現在時刻を付けます。LMS の出力は timecode を運びません。</p></li>
         </ul>
       </div>
@@ -981,14 +1046,11 @@
             <desc id="f6w-d">左の command は、入力に lms、出力に ndi、推論に cda-vsr を選ぶ。右の prefix には、実行 file、標準の部品 (LMS、NDI、CDA-VSR、SPANv2)、部品が共有する pixtreme、transport core、infer core が一つずつあり、選んだ名前の部品が使われる。標準に無い部品は、その配布物を同じ配置に足して選べる。</desc>
             <rect class="code-bg" x=".5" y="74" width="380" height="208" rx="8"/>
             <text class="t-code" x="24" y="112"><tspan class="t-code-acc">$</tspan> streamflow</text>
-            <text class="t-code" x="48" y="152">--input</text>
-            <text class="t-code t-code-acc" x="150" y="152">lms</text>
-            <text class="t-code" x="48" y="186">--output</text>
-            <text class="t-code t-code-acc" x="150" y="186">ndi</text>
-            <text class="t-code" x="48" y="220">--arch</text>
-            <text class="t-code t-code-acc" x="150" y="220">cda-vsr</text>
-            <text class="t-code" x="48" y="254">--model</text>
-            <text class="t-code" x="150" y="254">./weights.safetensors</text>
+            <text class="t-code" x="48" y="142">--input-type <tspan class="t-code-acc">lms</tspan></text>
+            <text class="t-code" x="48" y="172">--output-type <tspan class="t-code-acc">ndi</tspan></text>
+            <text class="t-code" x="48" y="202">--inference-type <tspan class="t-code-acc">cda-vsr</tspan></text>
+            <text class="t-code" x="48" y="232">--inference-weights</text>
+            <text class="t-code" x="66" y="260">./weights.safetensors</text>
 
             <path class="wire" d="M390 178H464" marker-end="url(#ah)"/>
             <text class="t-sm t-muted" x="427" y="166" text-anchor="middle">名前で探す</text>
@@ -1033,14 +1095,11 @@
             <desc id="f6n-d">上の command は、入力に lms、出力に ndi、推論に cda-vsr を選ぶ。下の prefix には、実行 file、標準の部品 (LMS、NDI、CDA-VSR、SPANv2)、部品が共有する pixtreme、transport core、infer core が一つずつあり、選んだ名前の部品が使われる。標準に無い部品は、その配布物を同じ配置に足して選べる。</desc>
             <rect class="code-bg" x=".5" y=".5" width="339" height="180" rx="8"/>
             <text class="t-code" x="16" y="32"><tspan class="t-code-acc">$</tspan> streamflow</text>
-            <text class="t-code" x="32" y="66">--input</text>
-            <text class="t-code t-code-acc" x="124" y="66">lms</text>
-            <text class="t-code" x="32" y="98">--output</text>
-            <text class="t-code t-code-acc" x="124" y="98">ndi</text>
-            <text class="t-code" x="32" y="130">--arch</text>
-            <text class="t-code t-code-acc" x="124" y="130">cda-vsr</text>
-            <text class="t-code" x="32" y="162">--model</text>
-            <text class="t-code" x="124" y="162">./weights.safetensors</text>
+            <text class="t-code" x="32" y="60">--input-type <tspan class="t-code-acc">lms</tspan></text>
+            <text class="t-code" x="32" y="88">--output-type <tspan class="t-code-acc">ndi</tspan></text>
+            <text class="t-code" x="32" y="116">--inference-type <tspan class="t-code-acc">cda-vsr</tspan></text>
+            <text class="t-code" x="32" y="144">--inference-weights</text>
+            <text class="t-code" x="50" y="170">./weights.safetensors</text>
             <path class="wire" d="M170 188V214" marker-end="url(#ah)"/>
             <text class="t-sm t-muted" x="182" y="206">名前で探す</text>
 
@@ -1122,14 +1181,14 @@
             <div class="code" style="margin-top:20px">
               <div class="code-head"><span>Run</span><span>bash</span></div>
 <pre><code><span class="p">$</span> streamflow --config live.yaml \
-    --input <span class="v">lms</span> \
+    --input-type <span class="v">lms</span> \
     --input-option connection.channel=1 \
-    --arch <span class="v">cda-vsr</span> \
-    --model ./weights.safetensors \
-    --output <span class="v">ndi</span> \
-    --width 1920 --height 1080 --audio</code></pre>
+    --inference-type <span class="v">cda-vsr</span> \
+    --inference-weights ./weights.safetensors \
+    --output-type <span class="v">ndi</span> \
+    --output-width 1920 --output-height 1080 --output-audio-enabled</code></pre>
             </div>
-            <p class="aside-note"><b>Windows から起動する</b> — 配布物には、Windows から WSL の中の streamflow を一回の操作で起動する batch file が、CDA-VSR 用と SPANv2 用に一つずつ付きます。使う model の batch file に LMS の ID、channel、<code>delay_ms</code> を渡すと、LMS の入力から ×2 の推論を経て NDI の出力へ送る引数を組み立てて起動します。WSL の distro の名前と重みの path は、batch file の先頭で変えられます。</p>
+            <p class="aside-note"><b>Windows から起動する</b> — 配布物には、Windows から WSL の中の streamflow を一回の操作で起動する batch file が、CDA-VSR 用と SPANv2 用に一つずつ付きます。使う model の batch file に LMS の ID、channel、<code>receive_delay_ms</code> を渡すと、LMS の入力から ×2 の推論を経て NDI の出力へ送る引数を組み立てて起動します。WSL の distro の名前と重みの path は、batch file の先頭で変えられます。</p>
           </div>
         </div>
       </div>
@@ -1153,7 +1212,7 @@
             <tr><th scope="row">出力の大きさ</th><td>起動時に指定します。推論の結果の大きさと違う時は、送る前に resize します</td></tr>
             <tr><th scope="row">音声と timecode</th><td>音声を映像とずらさずに通します (既定は無効)。timecode は NDI の出力で運びます</td></tr>
             <tr><th scope="row">起動</th><td>CLI の引数で部品の名前と出力の大きさを選びます。YAML の設定 file を併せて渡せ、同じ項目は引数の値を使います</td></tr>
-            <tr><th scope="row">LMS の受信の待ち</th><td><code>delay_ms</code> で選びます。書かなかった時は 100 ms です</td></tr>
+            <tr><th scope="row">LMS の受信の待ち</th><td><code>receive_delay_ms</code> で選びます。書かなかった時は 120 ms です</td></tr>
             <tr><th scope="row">停止</th><td>SIGINT または SIGTERM で、受け付けた処理を終えてから止まります。二回目の要求で残りの待ちを打ち切ります</td></tr>
             <tr><th scope="row">構成</th><td>1 process で 1 stream。GPU 一枚で動きます</td></tr>
             <tr><th scope="row">実行</th><td>C++ の application。実行に Python の環境を使いません</td></tr>

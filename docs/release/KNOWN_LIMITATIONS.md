@@ -1,6 +1,6 @@
 # Known limitations
 
-This guide covers **v0.4.398**, the native C++ application. streamflow connects LMS input to CDA-VSR or SPANv2 inference and LMS or NDI output through the C++ transport core. Each process handles one stream on one GPU. See the [installation guide](INSTALL.md), [usage reference](USAGE.md), and [checkpoint requirements](ENGINE.md).
+This guide covers **v0.4.398**, the native C++ application. streamflow connects LMS or NDI input to compatible inference and LMS or NDI output through the C++ transport core. LMS supports CDA-VSR and SPANv2; NDI input supports SPANv2 and cannot supply the motion vectors and residuals required by CDA-VSR. Each process handles one stream on one GPU. See the [installation guide](INSTALL.md), [usage reference](USAGE.md), and [checkpoint requirements](ENGINE.md).
 
 ## Measured operation
 
@@ -12,7 +12,7 @@ The measurements used the native shared-library prefix on one NVIDIA RTX A6000 u
 
 #### Sender-to-NDI-receiver latency
 
-Latency was measured from the sender handing a frame to LMS until the NDI receiver received it, excluding the 100 ms wait configured by `input.delay_ms`. The three runs changed `output.audio.max_wait_ms` as follows:
+Latency was measured from the sender handing a frame to LMS until the NDI receiver received it, excluding the 100 ms wait configured by `input.receive_delay_ms`. The three runs changed `output.audio.max_wait_ms` as follows:
 
 | Audio wait limit | Samples | Minimum | Median | p90 | Maximum | First-half median | Second-half median |
 |---|---|---|---|---|---|---|---|
@@ -26,11 +26,11 @@ All 405 samples were below 100 ms under these same-host conditions. End-to-end l
 
 With all three wait limits, the NDI receiver recorded equal video and audio packet counts, audio packet sizes of 1601 or 1602 sample frames, and a median interval of 2002 ms between known tones, matching the source. At the LMS receiver, all audio packets except the last were complete, and no audio references were reported as unavailable.
 
-The median interval from a received image flash to the corresponding tone onset was +6.5 ms for NDI and +13.0 ms for LMS for all three wait limits; positive values mean the audio followed the image. These observations cover the stated source and receivers. The actual time spent waiting for audio at the product's output, and the number of samples filled with silence there, are not available from standard output or the trace. The default wait limit remains one input frame period.
+The median interval from a received image flash to the corresponding tone onset was +6.5 ms for NDI and +13.0 ms for LMS for all three wait limits; positive values mean the audio followed the image. These observations cover the stated source and receivers. The actual time spent waiting for audio at the product's output, and the number of samples filled with silence there, are not available from standard output or the trace. The current default wait limit is 0 ms; the one-period default in the table was used for these historical measurements.
 
 #### Processing and output rates
 
-Separate rate measurements used `input.delay_ms: 0` without diagnostic trace recording. The output ratio is the observed output send rate divided by the nominal 30000/1001 fps rate; it does not measure receiver arrival rate.
+Separate rate measurements used `input.receive_delay_ms: 0` without diagnostic trace recording. The output ratio is the observed output send rate divided by the nominal 30000/1001 fps rate; it does not measure receiver arrival rate.
 
 | Output | Thread P processing rate | Output send rate / nominal rate |
 |---|---|---|
@@ -98,7 +98,7 @@ SPANv2 requires a compatible SPANv2 safetensors checkpoint. Other network archit
 
 - Image quality has not been evaluated. The v0.4.398 latency and audio observations above cover only the stated same-host CDA-VSR x2 fp16 runs; end-to-end latency for LMS output remains unmeasured. Other hosts, receivers, network paths, models, and checkpoints require separate validation.
 - v0.4.398 is distributed for Linux x86_64 / Ubuntu 24.04 or later, including WSL2. The Windows batch files launch the Linux executable inside WSL2; they do not provide a native Windows executable. The historical measurements have their own validation scopes.
-- SRT input and output, NDI input, and SDI are not registered in this application. Selecting `input.type: srt` or `output.type: srt` reports that SRT is unsupported and exits before the first frame.
+- SRT input and output and SDI are not registered in this application. Selecting `input.type: srt` or `output.type: srt` reports that SRT is unsupported and exits before the first frame.
 - The standard native prefix includes LMS, NDI, CDA-VSR and SPANv2. LMS requires glibc 2.39 or later; NDI requires the host Avahi client library (`libavahi-client.so.3`). TensorRT is supplied by the host. Missing selected modules stop startup before the first frame with the component name and companion distribution.
 - The core and output modules control send cadence, repetition of the last image with silence, audio sample count adjustment, and prefill waits. streamflow's `sent` statistic counts output send periods, including repeats; it does not establish arrival at a receiver.
 - The CLI provides no operator command to exchange its input, output, inference model, or settings during operation. Stop and restart it to apply changes. Each process handles one stream; simultaneous connections to multiple inputs or outputs within a process are not supported.

@@ -2,7 +2,7 @@
 
 This guide describes **v0.4.398**, the native C++ application. The deb and archive contain no model checkpoints, weights, or TensorRT engines. Receive a checkpoint supported by the selected inference module and its `SHA256SUMS` file from your provider, and verify the files as described in [INSTALL.md](INSTALL.md).
 
-Pass the safetensors checkpoint path with `--model PATH` or set `inference.model` in YAML. Relative argument paths start at the process's current directory; relative YAML model paths start at the configuration file's directory. Do not supply an engine path. The companion builds missing engines and manages the cache.
+Pass the safetensors checkpoint path with `--inference-weights PATH` or set `inference.weights` in YAML. Relative argument paths start at the process's current directory; relative YAML model paths start at the configuration file's directory. Do not supply an engine path. The companion builds missing engines and manages the cache.
 
 ## Included component versions
 
@@ -38,8 +38,8 @@ For a compatible checkpoint, select CDA-VSR as follows. Replace the path with th
 
 ```yaml
 inference:
-  arch: cda-vsr
-  model: models/cda-vsr.safetensors
+  type: cda-vsr
+  weights: models/cda-vsr.safetensors
   precision: fp16
 ```
 
@@ -48,12 +48,12 @@ CDA-VSR requires an input module that supplies motion vectors and residuals. LMS
 ## Prepare a SPANv2 checkpoint
 
 Supply a compatible producer-exported SPANv2 safetensors checkpoint and select
-`inference.arch: spanv2`. The standard native prefix includes this module; the inference runtime does not require PyTorch.
+`inference.type: spanv2`. The standard native prefix includes this module; the inference runtime does not require PyTorch.
 
 ```yaml
 inference:
-  arch: spanv2
-  model: models/spanv2.safetensors
+  type: spanv2
+  weights: models/spanv2.safetensors
   precision: fp16
 ```
 

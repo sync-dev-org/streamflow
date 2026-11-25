@@ -139,25 +139,25 @@ checkpoint の中身は変更せずに使います。TensorRT engine のパス�
 
 ```bash
 streamflow \
-  --input lms \
+  --input-type lms \
   --input-option "connection.id='abc-defg'" \
   --input-option "connection.password=''" \
   --input-option connection.channel=1 \
-  --input-option delay_ms=100 \
-  --arch cda-vsr \
-  --model "$HOME/streamflow/models/cda-vsr-x2-ft_c6_p96_20261101_18k.safetensors" \
+  --input-option receive_delay_ms=120 \
+  --inference-type cda-vsr \
+  --inference-weights "$HOME/streamflow/models/cda-vsr-x2-ft_c6_p96_20261101_18k.safetensors" \
   --inference-option precision=fp16 \
   --inference-option input_width=960 \
   --inference-option input_height=540 \
-  --output ndi --output-option "name='streamflow'" \
-  --width 1920 --height 1080 --audio
+  --output-type ndi --output-option "source_name='streamflow'" \
+  --output-width 1920 --output-height 1080 --output-audio-enabled
 ```
 
-入力 960 × 540、出力 1920 × 1080 は設定例です。入力の幅と高さは実際の映像に、出力の幅と高さは出力したい大きさに合わせます。`delay_ms=100` は LMS の受信側が待つ時間を ms で指定し、省略した場合も 100 ms です。
+入力 960 × 540、出力 1920 × 1080 は設定例です。入力の幅と高さは実際の映像に、出力の幅と高さは出力したい大きさに合わせます。`receive_delay_ms=120` は LMS の受信側が待つ時間を ms で指定し、省略した場合も 120 ms です。
 
-`--audio` は出力の音声を有効にし、省略すると音声を送りません。CLI の `--model` に相対パスを書く場合は、実行したディレクトリが基点です。初回は GPU を使って不足する TensorRT engine を準備するため時間がかかります。
+`--output-audio-enabled` は出力の音声を有効にし、省略すると音声を送りません。CLI の `--inference-weights` に相対パスを書く場合は、実行したディレクトリが基点です。初回は GPU を使って不足する TensorRT engine を準備するため時間がかかります。
 
-音声の到着は出力の送信の直前に待ちます。待ちの上限は、省略時は入力の frame 周期一回分 (30000/1001 fps では約 33.4 ms) です。変更する場合は `--output-option audio.max_wait_ms=0` のように ms で指定します。0 は待たずに送り、届いていない音声を無音で埋めます。NDI と LMS の出力は、送信の時刻を post buffer の待ちに追従させる機能が既定で有効です。詳しい設定は [USAGE.md](USAGE.md#output) を参照してください。
+出力 module は送信の直前に音声を確定します。待ちの上限は、省略時は 0 ms です。変更する場合は `--output-option audio.max_wait_ms=12.5` のように ms で指定します。0 は待たずに送り、届いていない音声を無音で埋めます。NDI と LMS の出力は、送信の時刻を post buffer の待ちに追従させる機能が既定で有効です。詳しい設定は [USAGE.md](USAGE.md#output) を参照してください。
 
 ## 5. YAML の設定ファイルで起動する
 
@@ -170,16 +170,16 @@ input:
     id: "abc-defg"
     password: ""
     channel: 1
-  delay_ms: 100
+  receive_delay_ms: 120
 inference:
-  arch: cda-vsr
-  model: models/cda-vsr-x2-ft_c6_p96_20261101_18k.safetensors
+  type: cda-vsr
+  weights: models/cda-vsr-x2-ft_c6_p96_20261101_18k.safetensors
   precision: fp16
   input_width: 960
   input_height: 540
 output:
   type: ndi
-  name: streamflow
+  source_name: streamflow
   width: 1920
   height: 1080
   audio:
@@ -190,11 +190,11 @@ output:
 streamflow --config "$HOME/streamflow/settings.yaml"
 ```
 
-YAML の `inference.model` の相対パスは、設定ファイルのあるディレクトリが基点です。この例では `$HOME/streamflow/models/` の checkpoint を読みます。YAML 内はこの例の相対パスか、実際の絶対パスを使ってください。
+YAML の `inference.weights` の相対パスは、設定ファイルのあるディレクトリが基点です。この例では `$HOME/streamflow/models/` の checkpoint を読みます。YAML 内はこの例の相対パスか、実際の絶対パスを使ってください。
 
-引数と設定ファイルを併用すると、同じ項目は引数が優先されます。たとえば `streamflow --config settings.yaml --width 1280 --height 720` は出力の大きさだけを替えます。入力・出力・推論の種類と、部品に必要な項目は引数または設定ファイルで指定します。全項目は [USAGE.md](USAGE.md)、設定例は [settings-example.yaml](settings-example.yaml) を参照してください。
+引数と設定ファイルを併用すると、同じ項目は引数が優先されます。たとえば `streamflow --config settings.yaml --output-width 1280 --output-height 720` は出力の大きさだけを替えます。入力・出力・推論の種類と、部品に必要な項目は引数または設定ファイルで指定します。全項目は [USAGE.md](USAGE.md)、設定例は [settings-example.yaml](settings-example.yaml) を参照してください。
 
-音声待ち上限の YAML の項目は `output.audio.max_wait_ms` です。操作者は 0 以上の有限の数を指定します。以前の `input.audio_wait_frame_limit` と `--input-option audio_wait_frame_limit=...` は受け付けず、指定すると最初の frame の前に停止して移行先を示します。以前の設定を使う場合は古い項目を除き、必要なら出力の待ち上限を ms で指定してください。
+音声待ち上限の YAML の項目は `output.audio.max_wait_ms` です。操作者は 0 以上の有限の数を指定します。
 
 ### 起動後の確認と停止
 
@@ -227,10 +227,10 @@ wsl.exe -d Ubuntu-24.04 -- streamflow --help
 続いて batch file を置いたフォルダーで、使用するモデルの一方を実行します。`abc-defg` と `1` は実際の LMS の ID と channel に替えます。
 
 ```bat
-streamflow-cdavsr.bat abc-defg 1 100
+streamflow-cdavsr.bat abc-defg 1 120
 ```
 
-SPANv2 の場合は `streamflow-spanv2.bat abc-defg 1 100` です。引数は左から LMS の ID、channel、受信の待ち時間 (ms) です。省略した値は画面で入力を求められ、待ち時間を空欄にすると 100 ms を使います。
+SPANv2 の場合は `streamflow-spanv2.bat abc-defg 1 120` です。引数は左から LMS の ID、channel、受信の待ち時間 (ms) です。省略した値は画面で入力を求められ、待ち時間を空欄にすると 120 ms を使います。
 
 batch file は入力 960 × 540・fp16・出力 1920 × 1080・音声有効の LMS → ×2 → NDI を起動し、password は空文字列です。password や入力サイズを変える場合は、第 4 章の引数を使うか、batch file 内の対応する引数を編集します。
 
@@ -287,7 +287,7 @@ engine cache は `$XDG_CACHE_HOME/tensoracle`、未設定なら `~/.cache/tensor
 | モデルの読込み・engine の準備に失敗 | モデルと checkpoint の組合せ、読取り権限と cache の書込み権限を確認し、表示された診断に従います |
 | 初回の出力まで時間がかかる | engine の準備中か標準出力を確認します。初回の準備は GPU と時間が必要です。入力サイズは実際の映像に合わせます |
 | NDI の出力が見つからない | 最初の LMS frame、出力名、Avahi の起動を確認します。送信元と受信側の到達性、WSL2 と Windows のネットワーク・ファイアウォール設定も確認します |
-| 音声が出ない | `--audio` または `output.audio.enabled: true` と入力の音声を確認します。出力する新しい画が無い時は無音を送ります |
+| 音声が出ない | `--output-audio-enabled` または `output.audio.enabled: true` と入力の音声を確認します。出力する新しい画が無い時は無音を送ります |
 | 設定や部品のエラー | 診断された項目と部品を [USAGE.md](USAGE.md) と照合し、設定を直して起動し直します |
 
 問い合わせる際は、配布物のバージョン、Ubuntu / WSL2 の別、起動コマンドまたは設定、表示された診断を添えてください。
