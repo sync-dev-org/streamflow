@@ -157,7 +157,7 @@ streamflow \
 
 `--output-audio-enabled` は出力の音声を有効にし、省略すると音声を送りません。CLI の `--inference-weights` に相対パスを書く場合は、実行したディレクトリが基点です。初回は GPU を使って不足する TensorRT engine を準備するため時間がかかります。
 
-出力 module は送信の直前に音声を確定します。待ちの上限は、省略時は 0 ms です。変更する場合は `--output-option audio.max_wait_ms=12.5` のように ms で指定します。0 は待たずに送り、届いていない音声を無音で埋めます。NDI と LMS の出力は、送信の時刻を post buffer の待ちに追従させる機能が既定で有効です。詳しい設定は [USAGE.md](USAGE.md#output) を参照してください。
+出力 module は送信の直前に音声を確定します。待ちの上限を省略すると、streamflow は出力を開く時の frame 周期一つ分を ms で渡します (30000/1001 fps なら約 33.367 ms)。入力の周期が変わり出力を開き直す時は、新しい周期に合わせます。変更する場合は `--output-option audio.max_wait_ms=12.5` のように ms で指定します。0 は待たずに送り、届いていない音声を無音で埋めます。NDI と LMS の出力では、出口が各画を、入力 module がその画を受け取った時刻から D = N × 一周期の後に選んで送ります。遅延の枚数 N の既定は 2、post buffer の保管の枚数 M の既定は N に 1 を足した値です。詳しい設定は [USAGE.md](USAGE.md#output) を参照してください。
 
 ## 5. YAML の設定ファイルで起動する
 

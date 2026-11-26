@@ -26,7 +26,7 @@ All 405 samples were below 100 ms under these same-host conditions. End-to-end l
 
 With all three wait limits, the NDI receiver recorded equal video and audio packet counts, audio packet sizes of 1601 or 1602 sample frames, and a median interval of 2002 ms between known tones, matching the source. At the LMS receiver, all audio packets except the last were complete, and no audio references were reported as unavailable.
 
-The median interval from a received image flash to the corresponding tone onset was +6.5 ms for NDI and +13.0 ms for LMS for all three wait limits; positive values mean the audio followed the image. These observations cover the stated source and receivers. The actual time spent waiting for audio at the product's output, and the number of samples filled with silence there, are not available from standard output or the trace. The current default wait limit is 0 ms; the one-period default in the table was used for these historical measurements.
+The median interval from a received image flash to the corresponding tone onset was +6.5 ms for NDI and +13.0 ms for LMS for all three wait limits; positive values mean the audio followed the image. These observations cover the stated source and receivers. The actual time spent waiting for audio at the product's output, and the number of samples filled with silence there, are not available from standard output or the trace. When omitted, the audio wait limit is one frame period, determined each time the output opens. The table records the wait limits used in these historical measurements.
 
 #### Processing and output rates
 

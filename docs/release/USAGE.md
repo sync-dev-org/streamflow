@@ -25,7 +25,7 @@ streamflow --input-type lms --input-option connection.id=abc-defg \
 | `--output-width WIDTH`, `--output-height HEIGHT` | `output.width`, `output.height` | Positive output dimensions (required). |
 | `--output-audio-enabled` | `output.audio.enabled` | Enable audio output. |
 | `--pre-buffer-capacity-frames N` | `pipeline.pre_buffer_capacity_frames` | Positive pre buffer capacity in frames; default `4`. |
-| `--post-buffer-capacity-frames M` | `pipeline.post_buffer_capacity_frames` | Positive capacity M in waiting frames, at least N; omitted: same as N. |
+| `--post-buffer-capacity-frames M` | `pipeline.post_buffer_capacity_frames` | Positive capacity M in waiting frames, at least N; omitted: N + 1. |
 | `--output-delay-frames N` | `output.delay_frames` | Positive receipt delay in frame periods; default `2`. |
 | `--cuda-device N` | `pipeline.cuda_device` | Non-negative GPU index visible to the process; default `0`. |
 | `--input-option KEY=VALUE` | `input.KEY` | Input setting; repeat for multiple settings. |
@@ -54,7 +54,7 @@ Item names in the tables are relative to each section. Use integers for integer 
 |---|---|---|---|
 | `cuda_device` | Non-negative integer | `0` | GPU index visible to the process. |
 | `pre_buffer_capacity_frames` | Positive integer | `4` | Capacity of the pre buffer between the input module and thread P, in frames. |
-| `post_buffer_capacity_frames` | Positive integer | `output.delay_frames` | Capacity M in waiting frames, at least N. The last image retained for repeats is not counted. |
+| `post_buffer_capacity_frames` | Positive integer | `output.delay_frames + 1` | Capacity M in waiting frames, at least N. The last image retained for repeats is not counted. |
 
 Use `--pre-buffer-capacity-frames`, `--post-buffer-capacity-frames`, and `--cuda-device` to set these values at startup, for example `streamflow --config settings.yaml --pre-buffer-capacity-frames 8 --post-buffer-capacity-frames 2 --cuda-device 0`. Arguments use the same value checks as the configuration file; invalid values stop startup with exit code `2` before the first frame.
 
@@ -163,11 +163,11 @@ The following items are common to outputs. Item names in the table are relative 
 | `delay_frames` | Positive integer | `2` | Receipt delay N; storage capacity M must be at least N. |
 | `prefill_frames` | Integer `1` for NDI and LMS | `1` | NDI and LMS require one initial frame for receipt scheduling. Other values stop startup before the first frame; choose the delay with `--output-delay-frames`. |
 | `audio.enabled` | Boolean | `false` | Pass input audio together with the image only when `true`. |
-| `audio.max_wait_ms` | Finite non-negative number | `0` ms | Maximum wait in milliseconds for a frame's audio immediately before output transmission, shared by NDI and LMS. At the limit, missing audio is filled with silence. `0` sends immediately with silence for any missing audio. |
+| `audio.max_wait_ms` | Finite non-negative number | One output frame period, in ms | Maximum wait in milliseconds for a frame's audio immediately before output transmission, shared by NDI and LMS. At the limit, missing audio is filled with silence. `0` sends immediately with silence for any missing audio. |
 
-When neither arguments nor the configuration file supplies `output.audio.max_wait_ms`, streamflow passes 0 ms to the output. The default remains 0 ms when the input period changes and the output reopens. An explicit value stays unchanged. Negative and non-numeric values stop startup before the first frame and identify the setting and value. Use `--output-option audio.max_wait_ms=0.125` to override the configuration file. Input reception and inference do not wait for audio; the output fills any missing audio with silence when the wait expires and sends the accepted frame.
+When neither arguments nor the configuration file supplies `output.audio.max_wait_ms`, streamflow passes one frame period in milliseconds, using the period with which the output opens: about 33.367 ms at 30000/1001 fps, 40 ms at 25 fps, or 16.683 ms at 60000/1001 fps. When the input period changes and the output reopens, the default follows the new period. An explicit value, including `0`, stays unchanged. Negative and non-numeric values stop startup before the first frame and identify the setting and value. Use `--output-option audio.max_wait_ms=0.125` to override the configuration file. Input reception and inference do not wait for audio; the output fills any missing audio with silence when the wait expires and sends the accepted frame.
 
-NDI and LMS use the core's `receipt_schedule` mode. `--output-delay-frames` or `output.delay_frames` selects delay N (default 2). `--post-buffer-capacity-frames` or `pipeline.post_buffer_capacity_frames` selects storage capacity M (default N, minimum N). The core selects each image D = N × one input frame period after input receipt, then encodes and sends it. M − N extra slots retain early arrivals without changing D; the last image retained for repeats does not occupy these waiting slots. Other exit modes do not receive N. D stays fixed during a run and excludes encoding and transmission after selection; at 30000/1001 fps, N = 2 gives about 66.7 ms.
+NDI and LMS use the core's `receipt_schedule` mode. `--output-delay-frames` or `output.delay_frames` selects delay N (default 2). `--post-buffer-capacity-frames` or `pipeline.post_buffer_capacity_frames` selects storage capacity M (default N + 1, minimum N). The core selects each image D = N × one input frame period after input receipt, then encodes and sends it. M − N extra slots retain early arrivals without changing D; the last image retained for repeats does not occupy these waiting slots. Other exit modes do not receive N. D stays fixed during a run and excludes encoding and transmission after selection; at 30000/1001 fps, N = 2 gives about 66.7 ms.
 
 The core follows input clock drift using the receipt times and input frame numbers. streamflow uses the core's default phase adjustment limit. Processing completed within D causes neither a post buffer drop nor a repeated image. An image that misses its selection time is discarded with its audio; that output period repeats the last image with silence. After an input restart, input number scope change, or frame period change, the new first receipt establishes the same N-period delay.
 
