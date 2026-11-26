@@ -78,11 +78,14 @@ For `type: lms`, put connection settings in the `connection` mapping. streamflow
 | `connection.password` | String | Required | LMS connection password. At most 8 ASCII characters; an empty value is allowed. Spaces and symbols are passed unchanged. |
 | `connection.channel` | Integer `1..255` | Required | LMS channel. The channels a connection ID may use are set by that ID's LMS contract, and video and audio can allow different numbers of channels. For a video channel above the allowance, the LMS service accepts the connection and then reports `Channel has exceeded the allowed number!`; no video is delivered. |
 | `fallback_frame_rate` | Positive fraction string | `"30000/1001"` | Fallback frame rate in frames/s when the HEVC VUI has no timing or its period is outside the eight values accepted by LMS input. |
-| `decode_capacity_frames` | Integer `1..65535` | `30` | Depth of the blocking buffer that holds encoded access units before decoding, and the number of decoder surfaces. |
+| `decode.library` | String `nvdec` or `ffmpeg` | `nvdec` | Decoder library. `ffmpeg` decodes received access units in software on the receiving thread. The library stays fixed during a run. |
+| `decode_capacity_frames` | Integer `1..65535` | `30` | Depth of the blocking buffer that holds encoded access units before decoding. With `nvdec`, also sets the number of decoder surfaces; with `ffmpeg`, only sets the queue depth. |
 | `audio_trim_unit_samples` | Integer `0..48000` | `240` | Number of sample frames in one unit of audio trimmed by the receiving SDK, before multiplying by the channel count. `0` excludes the trimmed amount from the audio position. |
 | `receive_delay_ms` | Non-negative integer | `120` | LMS receive latency in ms: how long the LMS SDK waits on the receiving side. |
 
 `decode_capacity_frames` is the capacity for encoded access units arriving while decoding falls behind. The default of 30 is about 1 second at 29.97 fps. When decoding keeps up, the buffer is empty, so increasing its depth does not increase latency. Set the depth of the pre buffer that drops frames after decoding separately with `pipeline.pre_buffer_capacity_frames`. The LMS vendor SDK runs inside the streamflow process; if the SDK terminates abnormally, the streamflow process stops with it.
+
+Select software decoding with `--input-option decode.library=ffmpeg` or `input.decode.library: ffmpeg` in the configuration file. This decoder cannot provide motion vectors or residuals, so pairing it with CDA-VSR fails before the first frame. Use a model such as SPANv2 that does not require them. To change the decoder library, stop streamflow and start it again with the new setting.
 
 LMS input accepts VUI periods of `1/24`, `1001/24000`, `1/25`, `1/30`, `1001/30000`, `1/50`, `1/60`, and `1001/60000` seconds. It uses the reciprocal of `input.fallback_frame_rate` as the fallback period when VUI timing is absent or outside this set.
 

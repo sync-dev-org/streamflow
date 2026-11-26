@@ -53,6 +53,12 @@ output:
   height: 1080
 ```
 
+## LMS の入力の decode
+
+操作者は `--input-option decode.library=nvdec` または設定 file の `input.decode.library: nvdec` で LMS の入力の decoder を選びます。値は文字列 `nvdec` と `ffmpeg` で、省略時は `nvdec` です。`ffmpeg` は受け取った access unit を受信の thread で software の decode します。`ffmpeg` では `input.decode_capacity_frames` は decode の前の queue の深さだけに効き、decoder の surface の数には当たりません。
+
+`ffmpeg` は motion vector と残差を出せないため、CDA-VSR と組むと streamflow は理由を示して最初の frame の前に止まります。操作者は SPANv2 など motion vector と残差を要らない model を選びます。入力 module は走行中に decoder の library を切り替えません。操作者は設定を変える時に停止してから起動し直します。
+
 ## NDI の入力
 
 操作者は `--input-type ndi` または設定 file の `input.type: ndi` で NDI の入力を選び、`source_name` に送り手が示す NDI の source の名前を指定します。名前は必須で、空文字と NUL を含む文字列は使えません。host の接頭辞、空白、記号を含め、実際の source 名をそのまま指定します。
