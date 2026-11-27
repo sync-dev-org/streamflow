@@ -27,9 +27,9 @@ apt は TensorRT の runtime (`libnvinfer11`、11.2 以上)、NDI が使う Avah
 
 音声を出力する時は、操作者が `--output-audio-enabled` または `output.audio.enabled: true` を指定します。入力と推論は音声の到着を待たず、出力 module が送信の直前に画に対応する音声を確定します。音声を待つ時間の上限は `output.audio.max_wait_ms` で指定します。省略すると、streamflow は出力を開く時の frame 周期一つ分を ms で渡します (30000/1001 fps なら約 33.367 ms、25 fps なら 40 ms)。入力の周期が変わり出力を開き直す時は、新しい周期に合わせます。明示した値は周期が変わっても保ちます。0 は待たずに送る指定で、上限までに届かなかった音声は無音で埋めます。操作者は 0 以上の有限の数を指定します。負の数や数でない値を指定すると、streamflow は最初の frame の前に止まります。
 
-NDI と LMS の出力では、操作者は `--output-delay-frames N` または `output.delay_frames: N` で遅延の枚数を選びます。既定は N = 2 です。core は入力 module が画を受け取った時刻から D = N × 一周期の後に画を選び、encode して送ります。保管の枚数 M は `--post-buffer-capacity-frames M` または `pipeline.post_buffer_capacity_frames: M` で選び、省略時は N に 1 を足した値になります。M は N 以上で、M − N の枠は早く届いた画を保つ余裕です。M を増やしても D は変わりません。M < N の時、streamflow は二つの項目と値を示して最初の frame の前に止まります。
+NDI と LMS の出力では、操作者は `--output-delay-frames N` または `output.delay_frames: N` で遅延の枚数を選びます。既定は N = 2 です。core は入力 module が画を受け取った時刻から D = N × 一周期の後に画を選び、encode して送ります。保管の枚数 M は `--post-buffer-capacity-frames M` または `pipeline.post_buffer_capacity_frames: M` で選び、省略時は N に 3 を足した値になります。M は N 以上で、M − N の枠は早く届いた画を保つ余裕です。M を増やしても D は変わりません。M < N の時、streamflow は二つの項目と値を示して最初の frame の前に止まります。今の周期に当たる画が無い時、core は受取 + D までに post buffer へ入った画を、受取 + D から一周期の内に送ります。出力が一周期に送る画は一枚です。受取 + D までに入らなかった画と、その後一周期の内に送る周期が無かった画は、音声と一緒に捨てます。
 
-処理が D に間に合う間、post buffer は画を捨てず、出力は前の画を繰り返しません。間に合わなかった画は音声と一緒に捨て、その周期は最後の画と無音を送ります。処理の時間を観測して D を変えることはありません。core は入力と出力の clock のずれだけを追い、位相の補正の上限には core の既定値を使います。
+処理が D に間に合う間、出力は前の画を繰り返しません。送る画が無い周期は、出力が最後の画と無音を送ります。処理の時間を観測して D を変えることはありません。core は入力と出力の clock のずれだけを追い、位相の補正の上限には core の既定値を使います。
 
 `output.prefill_frames` は NDI と LMS では 1 のみを受け付けます。不正な値を指定すると、streamflow は最初の frame の前に理由と `--output-delay-frames` を案内して止まります。
 

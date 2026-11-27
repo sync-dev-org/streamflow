@@ -13,7 +13,7 @@
 pipeline:                         # This entire section is optional
   cuda_device: 0                  # Default: 0. Non-negative integer; CLI: --cuda-device
   pre_buffer_capacity_frames: 4   # Default: 4. Positive integer; CLI: --pre-buffer-capacity-frames. Input module to thread P
-  post_buffer_capacity_frames: 3    # Capacity M in frames, at least output.delay_frames; omitted: N + 1
+  post_buffer_capacity_frames: 5    # Capacity M in frames, at least output.delay_frames; omitted: N + 3
 
 input:
   type: lms                       # Required. lms or ndi
