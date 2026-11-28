@@ -2,7 +2,7 @@
 
 対象バージョン: **0.4.398** / Linux x86_64・Ubuntu・WSL2
 
-Windows x86_64 の zip / MSI を使う場合は [Windows への導入](#native-windows)を参照してください。
+Windows x86_64 の zip / EXE installer を使う場合は [Windows への導入](#native-windows)を参照してください。
 
 受け取った配布ファイルの確認から、LMS の入力を CDA-VSR ×2 で処理して NDI へ出力する最初の起動までを説明します。操作は Ubuntu のターミナルで行います。Windows のコマンドプロンプトで行う操作は第 6 章に示します。
 
@@ -296,7 +296,7 @@ engine cache は `$XDG_CACHE_HOME/tensoracle`、未設定なら `~/.cache/tensor
 
 ## 9. Windows への導入
 
-Windows x86_64 用の zip と MSI は、同じ実行ファイルと標準部品 (LMS、NDI、CDA-VSR、SPANv2) を持ちます。streamflow の実行に Python、Visual Studio、CUDA Toolkit、WiX の導入は必要ありません。設定と checkpoint は操作者が書き込めるフォルダーに別途置きます。
+Windows x86_64 用の zip と installer は、同じ実行ファイルと標準部品 (LMS、NDI、CDA-VSR、SPANv2) を持ちます。streamflow の実行に Python、Visual Studio、CUDA Toolkit、NSIS の導入は必要ありません。設定と checkpoint は操作者が書き込めるフォルダーに別途置きます。
 
 ### host の準備
 
@@ -315,40 +315,55 @@ NVIDIA ドライバーは [NVIDIA の配布ページ](https://www.nvidia.com/dri
 where nvinfer_11.dll
 ```
 
-streamflow と MSI は、PATH の順に要求する DLL を探し、最初に見つかったフォルダーを使います。TensorRT 10 系だけでは起動も MSI の導入もできません。配布物が要求する DLL 名と SDK の version は `share\streamflow\windows-runtime.json`、配布物の version と source commit は `share\streamflow\release.json` に記録します。
+streamflow と installer は、PATH の順に要求する DLL を探し、最初に見つかったフォルダーを使います。TensorRT 10 系だけでは起動も installer の導入もできません。配布物が要求する DLL 名と SDK の version は `share\streamflow\windows-runtime.json`、配布物の version と source commit は `share\streamflow\release.json` に記録します。
 
-MSI は導入を始めた user の Machine と User の環境変数から PATH を組み立てるため、コマンドプロンプトでその process だけに追加した PATH は使いません。
+installer は導入する管理者の account の Machine と User の環境変数から PATH を組み立てます。UAC で別の管理者の account を使う場合は、その account の User PATH を検査します。コマンドプロンプトでその process だけに追加した PATH は使いません。全 user で使う時は、全 user が読み取れる TensorRT のフォルダーを Machine の PATH に置くことを推奨します。
 
-NVIDIA ドライバー、TensorRT、Desktop Video、MSVC Redistributable は host の前提です。zip と MSI はそれらを導入・削除しません。Windows の確認環境は Windows 11 Pro for Workstations 10.0.22631、Visual Studio 2022 17.14 / MSVC 19.44、CUDA 13.2、TensorRT 11.2.1.2、NDI SDK 6.3.2 です。Windows の version の下限をこの確認環境から定めるものではありません。
+NVIDIA ドライバー、TensorRT、Desktop Video、MSVC Redistributable は host の前提です。zip と installer はそれらを導入・削除しません。Windows の確認環境は Windows 11 Pro for Workstations 10.0.22631、Visual Studio 2022 17.14 / MSVC 19.44、CUDA 13.2、TensorRT 11.2.1.2、NDI SDK 6.3.2 です。Windows の version の下限をこの確認環境から定めるものではありません。
 
 ### 配布ファイルを確認する
 
-受け取った `streamflow-X.Y.Z-windows_x86_64.zip` または `.msi` と `SHA256SUMS` を同じフォルダーに置きます。PowerShell で SHA-256 を計算し、`SHA256SUMS` に書かれた同じファイル名の値と比較します。
+受け取った `streamflow-X.Y.Z-windows_x86_64.zip` または `.exe` と `SHA256SUMS` を同じフォルダーに置きます。PowerShell で SHA-256 を計算し、`SHA256SUMS` に書かれた同じファイル名の値と比較します。
 
 ```powershell
-Get-FileHash .\streamflow-X.Y.Z-windows_x86_64.msi -Algorithm SHA256
+Get-FileHash .\streamflow-X.Y.Z-windows_x86_64.exe -Algorithm SHA256
 Get-Content .\SHA256SUMS
 ```
 
 値が違う場合は導入を進めず、同じ配布分のファイルを受け取り直します。checkpoint は配布物と別のファイルであり、その checksum も確認します。
 
-### MSI を使う
+### EXE の installer を使う
 
-MSI はその PC の全 user に導入し、管理者の権限を求めます。既定の導入先は `C:\Program Files\streamflow` です。MSI は導入先の `bin` を system の PATH に追加し、`bin\streamflow.exe` の受信を許す Windows Defender Firewall の規則を全 profile に追加します。
+installer はその PC の全 user に導入し、管理者の権限を求めます。既定の導入先は `C:\Program Files\streamflow` です。installer は導入先の `bin` を system の PATH に追加し、`bin\streamflow.exe` の受信を許す Windows Defender Firewall の規則を全 profile に追加します。
 
 管理者の権限を持たない user は zip を使ってください。zip 自体の展開には管理者の権限は要りません。受信を許す firewall の規則は、管理者に追加を依頼してください。
 
-MSI に code signing は行っていません。SmartScreen などが発行元を確認できないと表示する場合があります。受け取った配布元と checksum を確認して操作してください。
+installer に code signing は行っていません。SmartScreen などが発行元を確認できないと表示する場合があります。受け取った配布元と checksum を確認して操作してください。
 
-TensorRT の DLL が PATH から見つからない場合、MSI は入手先を表示して導入を止めます。host の準備を済ませ、新しいターミナルまたは Explorer から再実行してください。
+TensorRT の DLL が PATH から見つからない場合、installer は入手先を表示して導入を止めます。host の準備を済ませ、新しいターミナルまたは Explorer から再実行してください。
 
 コマンドから導入する場合は、管理者のターミナルで実行します。
 
 ```bat
-msiexec /i streamflow-X.Y.Z-windows_x86_64.msi /qn /norestart /L*v install.log
+start "" /wait streamflow-X.Y.Z-windows_x86_64.exe /S
+echo %ERRORLEVEL%
 ```
 
-導入後は新しいターミナルを開き、`streamflow --help` を実行します。削除は Windows の「インストールされているアプリ」から streamflow を選ぶか、`msiexec /x streamflow-X.Y.Z-windows_x86_64.msi` で行います。削除にも管理者の権限が必要です。MSI は自分が導入したファイル、system の PATH への追加、firewall の規則を削除します。別に置いた設定と checkpoint は残ります。
+`/S` は画面を出さない導入です。終了 code は成功が `0`、失敗が `0` 以外です。GUI と `/S` は同じ TensorRT の検査を行い、DLL が無い時はその名前と入手先を `%TEMP%\streamflow-setup.log` (UTF-16LE) に記録します。GUI では同じ理由を画面にも表示します。
+
+導入後は新しいターミナルを開き、`streamflow --help` を実行します。同じ導入先の更新と同じ version の再導入に対応します。導入済みの version より古い version は拒否します。MSI で導入した streamflow が残っている場合、EXE は変更を始める前に止まります。Windows の「インストールされているアプリ」から MSI で導入した streamflow を削除してから EXE を実行してください。
+
+削除は Windows の「インストールされているアプリ」から streamflow を選ぶか、導入先の `uninstall.exe` を開きます。削除にも管理者の権限が必要です。installer は自分が導入したファイル、自分が足した system の PATH の項目と firewall の規則を削除します。別に置いた設定と checkpoint は残ります。導入と削除の処理が失敗した時は、file、PATH、firewall とアプリの登録を処理前の状態へ戻します。
+
+画面を出さずに削除し、完了と終了 code を取得する場合は、管理者の PowerShell で実行します。`_?=` の導入先は引数の最後に置き、導入先を変えた場合は実際の path に替えてください。
+
+```powershell
+Copy-Item 'C:\Program Files\streamflow\uninstall.exe' "$env:TEMP\streamflow-uninstall.exe"
+$result = Start-Process "$env:TEMP\streamflow-uninstall.exe" -ArgumentList '/S _?=C:\Program Files\streamflow' -Wait -PassThru
+$result.ExitCode
+```
+
+削除の理由と結果は `%TEMP%\streamflow-uninstall.log` (UTF-16LE) に記録します。
 
 ### zip を使う
 
@@ -365,7 +380,7 @@ zip は firewall の規則を追加しません。LMS などの入力を受信�
 
 ### firewall の規則を手動で追加する
 
-管理者として PowerShell を開き、`$program` に実際の `streamflow.exe` の絶対 path を指定します。次の例は MSI の既定の導入先です。zip を使う場合は展開先の `bin\streamflow.exe` に置き換えます。
+管理者として PowerShell を開き、`$program` に実際の `streamflow.exe` の絶対 path を指定します。次の例は installer の既定の導入先です。zip を使う場合は展開先の `bin\streamflow.exe` に置き換えます。
 
 ```powershell
 $program = (Resolve-Path 'C:\Program Files\streamflow\bin\streamflow.exe').Path
@@ -373,9 +388,9 @@ New-NetFirewallRule -Name 'streamflow-manual-inbound' -DisplayName 'streamflow m
   -Direction Inbound -Action Allow -Program $program -Profile Any
 ```
 
-この規則は指定した実行ファイルの受信だけを許可します。すべての program に対して port を開く規則ではありません。MSI が追加する規則の表示名は `streamflow MSI inbound` です。MSI が規則を追加済みの場合、手動で規則を重ねる必要はありません。
+この規則は指定した実行ファイルの受信だけを許可します。すべての program に対して port を開く規則ではありません。installer が追加する規則の表示名は `streamflow inbound` です。installer が規則を追加済みの場合、手動で規則を重ねる必要はありません。
 
-手動で追加した規則は MSI の uninstall や zip の削除では消えません。配布物を削除する時は、管理者の PowerShell で次の command を実行します。zip の展開先を移動した時は、古い規則を削除し、新しい絶対 path で追加し直してください。
+手動で追加した規則は installer の uninstall や zip の削除では消えません。配布物を削除する時は、管理者の PowerShell で次の command を実行します。zip の展開先を移動した時は、古い規則を削除し、新しい絶対 path で追加し直してください。
 
 ```powershell
 Remove-NetFirewallRule -Name 'streamflow-manual-inbound'
