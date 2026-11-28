@@ -71,8 +71,8 @@ output:
   height: 1080                     # Required. Height of images placed in the post buffer
   delay_frames: 2                  # Delay N in frames; CLI: --output-delay-frames. Default: 2
   prefill_frames: 1                # NDI and LMS accept only 1. Default: 1; choose delay with --output-delay-frames
-  # D = delay_frames * one input frame period, from receipt to image selection; encoding follows selection.
-  # M counts waiting images, excluding the last image used for repeats. Late images and their audio are discarded.
+  # D = delay_frames * one input frame period, added to the estimated input progression; encoding follows selection.
+  # M counts waiting images, excluding the last image used for repeats. Images whose valid period has ended are discarded with their audio.
   audio:
     enabled: false                # Pass input audio only when true. Default: false
     # max_wait_ms: 0               # Optional finite number >= 0, in ms. Default: one frame period at output open
